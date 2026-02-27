@@ -1,0 +1,15 @@
+{
+  "name": "uassets",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "dev": "bun --watch src/ui/app.ts",
+    "build": "bun build src/ui/app.ts --outdir dist --minify",
+    "test": "bun test",
+    "dump": "bun run src/cli/dump.ts"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "typescript": "^5"
+  }
+}
