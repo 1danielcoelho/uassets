@@ -1,17 +1,25 @@
 // ─── Byte range annotation ──────────────────────────────────────────────────
 
-export interface ByteRange {
+import type { FGuid } from "./parser/primitives.ts";
+
+interface ByteRangeBase {
   /** Byte offset in the file, inclusive. */
   start: number;
   /** Byte offset in the file, exclusive. */
   end: number;
   /** Short label shown in the legend, e.g. "Engine Version". */
   label: string;
-  /** Decoded value from the file. Stringified for display at render time. */
-  value?: unknown;
-  /** Nested ranges (e.g. the sub-fields of FEngineVersion). */
-  children?: ByteRange[];
 }
+
+export type ByteRange = ByteRangeBase & (
+  | { kind: "int8" | "int16" | "int32" | "uint8" | "uint16" | "uint32"
+            | "float32" | "float64";  value: number }
+  | { kind: "int64" | "uint64";       value: bigint }
+  | { kind: "bytes";                  value: Uint8Array }
+  | { kind: "string";                 value: string }
+  | { kind: "guid";                   value: FGuid }
+  | { kind: "group";                  value?: unknown; children: ByteRange[] }
+);
 
 // ─── Parse result ────────────────────────────────────────────────────────────
 

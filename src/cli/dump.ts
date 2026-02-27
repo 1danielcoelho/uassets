@@ -10,6 +10,7 @@
 
 import { readFileSync } from "fs";
 import type { ByteRange, ParseResult } from "../types.ts";
+import { fGuidToString } from "../parser/primitives.ts";
 import { parseUAsset } from "../parser/summary.ts";
 
 // ── Entry point ───────────────────────────────────────────────────────────────
@@ -80,17 +81,30 @@ printRangeTree(ranges, 0);
 
 function printRangeTree(ranges: ByteRange[], depth: number): void {
   const indent = "  ".repeat(depth);
-  for (const r of ranges) {
-    const offsetStr = `0x${r.start.toString(16).padStart(8, "0")}`;
-    const sizeStr   = `+${formatBytes(r.end - r.start)}`.padStart(9);
-    const colorDot  = colorChar(r.label);
-    const label     = r.label.padEnd(30 - depth * 2);
-    const valueStr  = r.value !== undefined ? stringifyValue(r.value) : undefined;
-    const value     = valueStr ? `  →  ${truncate(valueStr, 50)}` : "";
+  for (const range of ranges) {
+    const offsetStr = `0x${range.start.toString(16).padStart(8, "0")}`;
+    const sizeStr   = `+${formatBytes(range.end - range.start)}`.padStart(9);
+    const colorDot  = colorChar(range.label);
+    const label     = range.label.padEnd(30 - depth * 2);
+    const vs        = stringifyValue(range);
+    const value     = vs ? `  →  ${truncate(vs, 50)}` : "";
     console.log(`${indent}${colorDot} ${offsetStr} ${sizeStr}  ${label}${value}`);
-    if (r.children && r.children.length > 0) {
-      printRangeTree(r.children, depth + 1);
+    if (range.kind === "group" && range.children.length > 0) {
+      printRangeTree(range.children, depth + 1);
     }
+  }
+}
+
+function stringifyValue(range: ByteRange): string {
+  switch (range.kind) {
+    case "int8":   case "int16":   case "int32":
+    case "uint8":  case "uint16":  case "uint32":
+    case "float32": case "float64": return range.value.toString();
+    case "int64":  case "uint64":  return range.value.toString();
+    case "bytes":   return Array.from(range.value).map(b => b.toString(16).padStart(2, "0")).join("");
+    case "string":  return range.value;
+    case "guid":    return fGuidToString(range.value);
+    case "group":   return "";
   }
 }
 
@@ -121,18 +135,6 @@ function formatBytes(n: number): string {
   return `${(n / (1024 * 1024 * 1024)).toFixed(2)} GB`;
 }
 
-function stringifyValue(v: unknown): string {
-  if (v === null || v === undefined) return "";
-  if (typeof v === "bigint") return v.toString();
-  if (typeof v === "number") return v.toString();
-  if (typeof v === "string") return v;
-  if (typeof v === "boolean") return v.toString();
-  if (v instanceof Uint8Array) return Array.from(v).map(b => b.toString(16).padStart(2, "0")).join("");
-  if (Array.isArray(v)) return `[${v.length} items]`;
-  if (typeof v === "object") return JSON.stringify(v);
-  return String(v);
-}
-
 function truncate(s: string, max: number): string {
   return s.length > max ? s.slice(0, max - 1) + "…" : s;
 }
@@ -156,8 +158,8 @@ function countAnnotatedBytes(ranges: ByteRange[], totalBytes: number): number {
 }
 
 function collectIntervals(ranges: ByteRange[], out: [number, number][]): void {
-  for (const r of ranges) {
-    out.push([r.start, r.end]);
-    if (r.children) collectIntervals(r.children, out);
+  for (const range of ranges) {
+    out.push([range.start, range.end]);
+    if (range.kind === "group") collectIntervals(range.children, out);
   }
 }

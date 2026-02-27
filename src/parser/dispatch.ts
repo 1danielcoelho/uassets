@@ -37,10 +37,7 @@ export function dispatchExport(
     parser(r, className, offset, size, names, fileVersionUE4);
   } else {
     // Unknown type — annotate the whole block as opaque
-    r.annotate(
-      `Export Data (${className || "unknown"})`,
-      () => r.readBytes(size),
-    );
+    r.readBytes(size, `Export Data (${className || "unknown"})`);
   }
 }
 

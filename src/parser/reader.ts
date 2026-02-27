@@ -12,9 +12,13 @@ import type {
  *
  * All multi-byte integers are read as little-endian (UE default).
  *
- * The `annotate()` method wraps a read callback and records the byte range it
- * consumed along with a label and color, building up the annotation tree that
- * the hex viewer renders.
+ * Every read method accepts an optional `label`. When a label is supplied the
+ * method pushes a typed ByteRange to the internal annotation list in addition
+ * to returning the value. Omit the label for internal/intermediate reads that
+ * don't need their own annotation (e.g. inside a `group()` lambda).
+ *
+ * Use `group(label, fn)` to wrap a block of reads under a single parent
+ * annotation whose children are all the labeled reads performed inside `fn`.
  */
 export class BinaryReader {
   private readonly view: DataView;
@@ -33,66 +37,106 @@ export class BinaryReader {
     return this.view.byteLength;
   }
 
-  // ── Raw reads ─────────────────────────────────────────────────────────────
+  // ── Raw scalar reads ───────────────────────────────────────────────────────
 
-  readUint8(): number {
-    const v = this.view.getUint8(this.pos);
+  readUint8(): number;
+  readUint8(label: string): number;
+  readUint8(label?: string): number {
+    const start = this.pos;
+    const value = this.view.getUint8(this.pos);
     this.pos += 1;
-    return v;
+    if (label !== undefined) this._annotations.push({ kind: "uint8", start, end: this.pos, label, value });
+    return value;
   }
 
-  readInt16(): number {
-    const v = this.view.getInt16(this.pos, true);
+  readInt16(): number;
+  readInt16(label: string): number;
+  readInt16(label?: string): number {
+    const start = this.pos;
+    const value = this.view.getInt16(this.pos, true);
     this.pos += 2;
-    return v;
+    if (label !== undefined) this._annotations.push({ kind: "int16", start, end: this.pos, label, value });
+    return value;
   }
 
-  readUint16(): number {
-    const v = this.view.getUint16(this.pos, true);
+  readUint16(): number;
+  readUint16(label: string): number;
+  readUint16(label?: string): number {
+    const start = this.pos;
+    const value = this.view.getUint16(this.pos, true);
     this.pos += 2;
-    return v;
+    if (label !== undefined) this._annotations.push({ kind: "uint16", start, end: this.pos, label, value });
+    return value;
   }
 
-  readInt32(): number {
-    const v = this.view.getInt32(this.pos, true);
+  readInt32(): number;
+  readInt32(label: string): number;
+  readInt32(label?: string): number {
+    const start = this.pos;
+    const value = this.view.getInt32(this.pos, true);
     this.pos += 4;
-    return v;
+    if (label !== undefined) this._annotations.push({ kind: "int32", start, end: this.pos, label, value });
+    return value;
   }
 
-  readUint32(): number {
-    const v = this.view.getUint32(this.pos, true);
+  readUint32(): number;
+  readUint32(label: string): number;
+  readUint32(label?: string): number {
+    const start = this.pos;
+    const value = this.view.getUint32(this.pos, true);
     this.pos += 4;
-    return v;
+    if (label !== undefined) this._annotations.push({ kind: "uint32", start, end: this.pos, label, value });
+    return value;
   }
 
-  readInt64(): bigint {
-    const v = this.view.getBigInt64(this.pos, true);
+  readInt64(): bigint;
+  readInt64(label: string): bigint;
+  readInt64(label?: string): bigint {
+    const start = this.pos;
+    const value = this.view.getBigInt64(this.pos, true);
     this.pos += 8;
-    return v;
+    if (label !== undefined) this._annotations.push({ kind: "int64", start, end: this.pos, label, value });
+    return value;
   }
 
-  readUint64(): bigint {
-    const v = this.view.getBigUint64(this.pos, true);
+  readUint64(): bigint;
+  readUint64(label: string): bigint;
+  readUint64(label?: string): bigint {
+    const start = this.pos;
+    const value = this.view.getBigUint64(this.pos, true);
     this.pos += 8;
-    return v;
+    if (label !== undefined) this._annotations.push({ kind: "uint64", start, end: this.pos, label, value });
+    return value;
   }
 
-  readFloat32(): number {
-    const v = this.view.getFloat32(this.pos, true);
+  readFloat32(): number;
+  readFloat32(label: string): number;
+  readFloat32(label?: string): number {
+    const start = this.pos;
+    const value = this.view.getFloat32(this.pos, true);
     this.pos += 4;
-    return v;
+    if (label !== undefined) this._annotations.push({ kind: "float32", start, end: this.pos, label, value });
+    return value;
   }
 
-  readFloat64(): number {
-    const v = this.view.getFloat64(this.pos, true);
+  readFloat64(): number;
+  readFloat64(label: string): number;
+  readFloat64(label?: string): number {
+    const start = this.pos;
+    const value = this.view.getFloat64(this.pos, true);
     this.pos += 8;
-    return v;
+    if (label !== undefined) this._annotations.push({ kind: "float64", start, end: this.pos, label, value });
+    return value;
   }
 
-  readBytes(n: number): Uint8Array {
-    const slice = this.bytes.slice(this.pos, this.pos + n);
+  readBytes(n: number): Uint8Array;
+  readBytes(n: number, label: string): Uint8Array;
+  readBytes(n: number, label?: string): Uint8Array {
+    const start = this.pos;
+    const value = this.bytes.slice(this.pos, this.pos + n);
     this.pos += n;
-    return slice;
+    if (label !== undefined) this._annotations.push({ kind: "bytes", start, end: this.pos, label, value });
+    return value;
   }
 
   /** Read bytes at an absolute offset without moving the cursor. */
@@ -105,27 +149,44 @@ export class BinaryReader {
     this.pos = offset;
   }
 
-  // ── UE primitives ─────────────────────────────────────────────────────────
+  // ── UE primitive reads ─────────────────────────────────────────────────────
 
-  readFString(): string {
+  readFString(): string;
+  readFString(label: string): string;
+  readFString(label?: string): string {
+    const start = this.pos;
     const len = this.readInt32();
-    if (len === 0) return "";
-    if (len > 0) {
+    let value: string;
+    if (len === 0) {
+      value = "";
+    } else if (len > 0) {
       const bytes = this.readBytes(len);
       const end = bytes[len - 1] === 0 ? len - 1 : len;
-      return new TextDecoder("utf-8").decode(bytes.subarray(0, end));
+      value = new TextDecoder("utf-8").decode(bytes.subarray(0, end));
     } else {
       const charCount = -len;
       const bytes = this.readBytes(charCount * 2);
       const end = (bytes[charCount * 2 - 1] === 0 && bytes[charCount * 2 - 2] === 0)
         ? (charCount - 1) * 2
         : charCount * 2;
-      return new TextDecoder("utf-16le").decode(bytes.subarray(0, end));
+      value = new TextDecoder("utf-16le").decode(bytes.subarray(0, end));
     }
+    if (label !== undefined) this._annotations.push({ kind: "string", start, end: this.pos, label, value });
+    return value;
   }
 
-  readFGuid(): FGuid {
-    return { a: this.readUint32(), b: this.readUint32(), c: this.readUint32(), d: this.readUint32() };
+  readFGuid(): FGuid;
+  readFGuid(label: string): FGuid;
+  readFGuid(label?: string): FGuid {
+    const start = this.pos;
+    const value: FGuid = {
+      a: this.readUint32(),
+      b: this.readUint32(),
+      c: this.readUint32(),
+      d: this.readUint32(),
+    };
+    if (label !== undefined) this._annotations.push({ kind: "guid", start, end: this.pos, label, value });
+    return value;
   }
 
   readFEngineVersion(): FEngineVersion {
@@ -164,54 +225,22 @@ export class BinaryReader {
     return result;
   }
 
-  // ── Annotation ────────────────────────────────────────────────────────────
+  // ── Annotation grouping ────────────────────────────────────────────────────
 
   /**
-   * Wraps a read callback, recording the byte range consumed as an annotation.
+   * Runs `fn`, collects all labeled reads performed inside it as children, and
+   * emits a single "group" ByteRange covering the whole span.
    *
-   * Returns the value produced by `fn`. The annotation is added to the internal
-   * list AND returned as the second element of a tuple so callers can nest
-   * annotations as children.
-   *
-   * Example:
-   *   const [ver, range] = reader.annotate("Engine Version", "version", () => reader.readFEngineVersion());
+   * Returns the value produced by `fn`.
    */
-  annotate<T>(
-    label: string,
-    fn: () => T,
-    children?: ByteRange[],
-  ): [T, ByteRange] {
-    const start = this.pos;
-    const value = fn();
-    const end = this.pos;
-    const range: ByteRange = { start, end, label, value, children };
-    this._annotations.push(range);
-    return [value, range];
-  }
-
-  /**
-   * Like `annotate`, but collects child annotations produced inside `fn` and
-   * attaches them as `children` on the parent range.
-   *
-   * The child annotations are NOT added to the top-level list — only the
-   * parent is. Children are accessible via `range.children`.
-   */
-  annotateGroup<T>(
-    label: string,
-    fn: () => T,
-  ): [T, ByteRange] {
+  group<T>(label: string, fn: () => T): T {
     const before = this._annotations.length;
     const start = this.pos;
     const value = fn();
     const end = this.pos;
-    // Pull out any annotations added during fn() — they become children
-    const children = this._annotations.splice(before);
-    const range: ByteRange = {
-      start, end, label, value,
-      children: children.length > 0 ? children : undefined,
-    };
-    this._annotations.push(range);
-    return [value, range];
+    const children: ByteRange[] = this._annotations.splice(before);
+    this._annotations.push({ kind: "group", start, end, label, value, children });
+    return value;
   }
 
   /** Return all top-level collected annotations in order. */
@@ -219,4 +248,3 @@ export class BinaryReader {
     return this._annotations;
   }
 }
-
