@@ -7,31 +7,11 @@ export interface ByteRange {
   end: number;
   /** Short label shown in the legend, e.g. "Engine Version". */
   label: string;
-  /** Human-readable decoded value, e.g. "5.3.2 (CL 27405482)". */
-  value?: string;
-  /** Color token. One of the keys in COLORS. */
-  color: ColorKey;
+  /** Decoded value from the file. Stringified for display at render time. */
+  value?: unknown;
   /** Nested ranges (e.g. the sub-fields of FEngineVersion). */
   children?: ByteRange[];
 }
-
-// Color palette — add more tokens here as needed.
-export const COLORS = {
-  magic:        "#4ade80", // green  — file magic / signature
-  version:      "#60a5fa", // blue   — version fields
-  flags:        "#f472b6", // pink   — flag/enum fields
-  offset:       "#fb923c", // orange — offset/count pairs
-  string:       "#a78bfa", // purple — FString / FName values
-  guid:         "#34d399", // teal   — GUIDs
-  customver:    "#fbbf24", // amber  — custom version entries
-  export:       "#818cf8", // indigo — export table entries
-  import:       "#e879f9", // fuchsia— import table entries
-  name:         "#94a3b8", // slate  — names table entries
-  bulk:         "#475569", // dark slate — opaque bulk data
-  unknown:      "#334155", // darker slate — unparsed regions
-} as const;
-
-export type ColorKey = keyof typeof COLORS;
 
 // ─── Parse result ────────────────────────────────────────────────────────────
 

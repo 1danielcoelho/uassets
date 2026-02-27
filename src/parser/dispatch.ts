@@ -7,7 +7,6 @@
  */
 
 import { BinaryReader } from "./reader.ts";
-import type { ByteRange } from "../types.ts";
 
 type ExportParser = (
   r: BinaryReader,
@@ -40,9 +39,7 @@ export function dispatchExport(
     // Unknown type — annotate the whole block as opaque
     r.annotate(
       `Export Data (${className || "unknown"})`,
-      "unknown",
       () => r.readBytes(size),
-      () => `${size} bytes, unparsed`,
     );
   }
 }

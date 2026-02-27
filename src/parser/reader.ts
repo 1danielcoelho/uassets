@@ -1,4 +1,11 @@
-import type { ByteRange, ColorKey } from "../types.ts";
+import type { ByteRange } from "../types.ts";
+import type {
+  FGuid,
+  FEngineVersion,
+  FCustomVersion,
+  FGenerationInfo,
+  FCompressedChunk,
+} from "./primitives.ts";
 
 /**
  * Cursor-based binary reader over an ArrayBuffer.
@@ -98,6 +105,65 @@ export class BinaryReader {
     this.pos = offset;
   }
 
+  // ── UE primitives ─────────────────────────────────────────────────────────
+
+  readFString(): string {
+    const len = this.readInt32();
+    if (len === 0) return "";
+    if (len > 0) {
+      const bytes = this.readBytes(len);
+      const end = bytes[len - 1] === 0 ? len - 1 : len;
+      return new TextDecoder("utf-8").decode(bytes.subarray(0, end));
+    } else {
+      const charCount = -len;
+      const bytes = this.readBytes(charCount * 2);
+      const end = (bytes[charCount * 2 - 1] === 0 && bytes[charCount * 2 - 2] === 0)
+        ? (charCount - 1) * 2
+        : charCount * 2;
+      return new TextDecoder("utf-16le").decode(bytes.subarray(0, end));
+    }
+  }
+
+  readFGuid(): FGuid {
+    return { a: this.readUint32(), b: this.readUint32(), c: this.readUint32(), d: this.readUint32() };
+  }
+
+  readFEngineVersion(): FEngineVersion {
+    return {
+      major:      this.readUint16(),
+      minor:      this.readUint16(),
+      patch:      this.readUint16(),
+      changelist: this.readUint32(),
+      branch:     this.readFString(),
+    };
+  }
+
+  readFCustomVersion(): FCustomVersion {
+    return { guid: this.readFGuid(), version: this.readInt32() };
+  }
+
+  readFGenerationInfo(): FGenerationInfo {
+    return { exportCount: this.readInt32(), nameCount: this.readInt32() };
+  }
+
+  readFCompressedChunk(): FCompressedChunk {
+    return {
+      uncompressedOffset: this.readInt32(),
+      uncompressedSize:   this.readInt32(),
+      compressedOffset:   this.readInt32(),
+      compressedSize:     this.readInt32(),
+    };
+  }
+
+  readArray<T>(readItem: (r: BinaryReader) => T): T[] {
+    const count = this.readInt32();
+    const result: T[] = [];
+    for (let i = 0; i < count; i++) {
+      result.push(readItem(this));
+    }
+    return result;
+  }
+
   // ── Annotation ────────────────────────────────────────────────────────────
 
   /**
@@ -112,22 +178,13 @@ export class BinaryReader {
    */
   annotate<T>(
     label: string,
-    color: ColorKey,
     fn: () => T,
-    valueToString?: (v: T) => string,
     children?: ByteRange[],
   ): [T, ByteRange] {
     const start = this.pos;
     const value = fn();
     const end = this.pos;
-    const range: ByteRange = {
-      start,
-      end,
-      label,
-      color,
-      value: valueToString ? valueToString(value) : stringifyValue(value),
-      children,
-    };
+    const range: ByteRange = { start, end, label, value, children };
     this._annotations.push(range);
     return [value, range];
   }
@@ -141,9 +198,7 @@ export class BinaryReader {
    */
   annotateGroup<T>(
     label: string,
-    color: ColorKey,
     fn: () => T,
-    valueToString?: (v: T) => string,
   ): [T, ByteRange] {
     const before = this._annotations.length;
     const start = this.pos;
@@ -152,11 +207,7 @@ export class BinaryReader {
     // Pull out any annotations added during fn() — they become children
     const children = this._annotations.splice(before);
     const range: ByteRange = {
-      start,
-      end,
-      label,
-      color,
-      value: valueToString ? valueToString(value) : stringifyValue(value),
+      start, end, label, value,
       children: children.length > 0 ? children : undefined,
     };
     this._annotations.push(range);
@@ -169,15 +220,3 @@ export class BinaryReader {
   }
 }
 
-// ── Helpers ──────────────────────────────────────────────────────────────────
-
-function stringifyValue(v: unknown): string {
-  if (v === null || v === undefined) return "";
-  if (typeof v === "bigint") return v.toString();
-  if (typeof v === "number") return v.toString();
-  if (typeof v === "string") return v;
-  if (typeof v === "boolean") return v.toString();
-  if (Array.isArray(v)) return `[${v.length} items]`;
-  if (typeof v === "object") return JSON.stringify(v);
-  return String(v);
-}

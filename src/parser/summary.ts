@@ -15,14 +15,8 @@
 
 import { BinaryReader } from "./reader.ts";
 import {
-  readFString,
-  readFGuid,
   fGuidToString,
-  readFEngineVersion,
   fEngineVersionToString,
-  readFCustomVersion,
-  readFGenerationInfo,
-  readArray,
   type FObjectExport,
   type FObjectImport,
 } from "./primitives.ts";
@@ -75,37 +69,33 @@ export function parseUAsset(buffer: ArrayBuffer): ParseResult {
 
   // ── Phase 1: Fixed header ────────────────────────────────────────────────
 
-  const [magic] = r.annotate("Magic Number", "magic", () => r.readUint32(),
-    v => `0x${v.toString(16).toUpperCase().padStart(8, "0")}`);
+  const [magic] = r.annotate("Magic Number", () => r.readUint32());
 
   if (magic !== PACKAGE_FILE_TAG) {
     throw new Error(`Not a UAsset file: magic 0x${magic.toString(16).toUpperCase()} ≠ 0x9E2A83C1`);
   }
 
-  const [legacyFileVersion] = r.annotate("Legacy File Version", "version", () => r.readInt32(),
-    v => v.toString());
+  const [legacyFileVersion] = r.annotate("Legacy File Version", () => r.readInt32());
 
   if (legacyFileVersion !== -4) {
-    r.annotate("Legacy UE3 Version", "version", () => r.readInt32());
+    r.annotate("Legacy UE3 Version", () => r.readInt32());
   }
 
-  const [fileVersionUE4] = r.annotate("File Version UE4", "version", () => r.readInt32());
+  const [fileVersionUE4] = r.annotate("File Version UE4", () => r.readInt32());
 
   let fileVersionUE5 = 0;
   if (legacyFileVersion <= -8) {
-    [fileVersionUE5] = r.annotate("File Version UE5", "version", () => r.readInt32());
+    [fileVersionUE5] = r.annotate("File Version UE5", () => r.readInt32());
   }
 
-  r.annotate("File Version Licensee", "version", () => r.readUint32());
+  r.annotate("File Version Licensee", () => r.readUint32());
 
   // SavedHash (FIoHash = 20 bytes) + TotalHeaderSize come BEFORE custom versions
   // when fileVersionUE5 >= PACKAGE_SAVED_HASH (1016).
   let totalHeaderSize = 0;
   if (fileVersionUE5 >= UE5_PACKAGE_SAVED_HASH) {
-    r.annotate("Saved Hash (FIoHash)", "guid", () => r.readBytes(20),
-      bytes => Array.from(bytes).map(b => b.toString(16).padStart(2, "0")).join(""));
-    [totalHeaderSize] = r.annotate("Total Header Size", "offset", () => r.readInt32(),
-      v => `0x${v.toString(16)}`);
+    r.annotate("Saved Hash (FIoHash)", () => r.readBytes(20));
+    [totalHeaderSize] = r.annotate("Total Header Size", () => r.readInt32());
   }
 
   // Custom versions — present when legacyFileVersion <= -2.
@@ -113,203 +103,177 @@ export function parseUAsset(buffer: ArrayBuffer): ParseResult {
   // Wire format: TArray where each entry is FGuid (16 bytes) + int32 version = 20 bytes.
   let customVersions: { name: string; version: number }[] = [];
   if (legacyFileVersion <= -2) {
-    const [cvs] = r.annotateGroup("Custom Versions", "customver", () => {
+    const [cvs] = r.annotateGroup("Custom Versions", () => {
       const count = r.readInt32();
       const result: { name: string; version: number }[] = [];
       for (let i = 0; i < count; i++) {
-        const [cv] = r.annotateGroup(`Custom Version [${i}]`, "customver", () => {
-          const guid = readFGuid(r);
+        const [cv] = r.annotateGroup(`Custom Version [${i}]`, () => {
+          const guid = r.readFGuid();
           const ver  = r.readInt32();
           return { guid, version: ver };
-        }, v => `${fGuidToString(v.guid)} = ${v.version}`);
+        });
         result.push({ name: fGuidToString(cv.guid), version: cv.version });
       }
       return result;
-    }, v => `${v.length} entries`);
+    });
     customVersions = cvs;
   }
 
   // TotalHeaderSize comes AFTER custom versions when fileVersionUE5 < PACKAGE_SAVED_HASH.
   if (fileVersionUE5 < UE5_PACKAGE_SAVED_HASH) {
-    [totalHeaderSize] = r.annotate("Total Header Size", "offset", () => r.readInt32(),
-      v => `0x${v.toString(16)}`);
+    [totalHeaderSize] = r.annotate("Total Header Size", () => r.readInt32());
   }
 
-  const [packageName]  = r.annotate("Package Name",  "string", () => readFString(r));
-  const [packageFlags] = r.annotate("Package Flags", "flags",  () => r.readUint32(),
-    v => `0x${v.toString(16).padStart(8, "0")}`);
+  const [packageName]  = r.annotate("Package Name", () => r.readFString());
+  r.annotate("Package Flags", () => r.readUint32());
 
-  const [nameCount]  = r.annotate("Name Count",  "offset", () => r.readInt32());
-  const [nameOffset] = r.annotate("Name Offset", "offset", () => r.readInt32(),
-    v => `0x${v.toString(16)}`);
+  const [nameCount]  = r.annotate("Name Count", () => r.readInt32());
+  const [nameOffset] = r.annotate("Name Offset", () => r.readInt32());
 
   // SoftObjectPaths — UE5 >= ADD_SOFTOBJECTPATH_LIST (1008)
   if (fileVersionUE5 >= UE5_ADD_SOFTOBJECTPATH_LIST) {
-    r.annotate("Soft Object Paths Count",  "offset", () => r.readInt32());
-    r.annotate("Soft Object Paths Offset", "offset", () => r.readInt32(),
-      v => `0x${v.toString(16)}`);
+    r.annotate("Soft Object Paths Count", () => r.readInt32());
+    r.annotate("Soft Object Paths Offset", () => r.readInt32());
   }
 
   // LocalizationId — editor-only, present when fileVersionUE4 >= 516
   if (fileVersionUE4 >= UE4_ADDED_PACKAGE_SUMMARY_LOCALIZATION_ID) {
-    r.annotate("Localization ID", "string", () => readFString(r));
+    r.annotate("Localization ID", () => r.readFString());
   }
 
   // Gatherable text data — UE4 >= 459
   if (fileVersionUE4 >= UE4_SERIALIZE_TEXT_IN_PACKAGES) {
-    r.annotate("Gatherable Text Data Count",  "offset", () => r.readInt32());
-    r.annotate("Gatherable Text Data Offset", "offset", () => r.readInt32(),
-      v => `0x${v.toString(16)}`);
+    r.annotate("Gatherable Text Data Count", () => r.readInt32());
+    r.annotate("Gatherable Text Data Offset", () => r.readInt32());
   }
 
-  const [exportCount]  = r.annotate("Export Count",  "offset", () => r.readInt32());
-  const [exportOffset] = r.annotate("Export Offset", "offset", () => r.readInt32(),
-    v => `0x${v.toString(16)}`);
-  const [importCount]  = r.annotate("Import Count",  "offset", () => r.readInt32());
-  const [importOffset] = r.annotate("Import Offset", "offset", () => r.readInt32(),
-    v => `0x${v.toString(16)}`);
+  const [exportCount]  = r.annotate("Export Count", () => r.readInt32());
+  const [exportOffset] = r.annotate("Export Offset", () => r.readInt32());
+  const [importCount]  = r.annotate("Import Count", () => r.readInt32());
+  const [importOffset] = r.annotate("Import Offset", () => r.readInt32());
 
   // Verse cells (virtual machine export/import cells) — UE5 >= 1015
   if (fileVersionUE5 >= UE5_VERSE_CELLS) {
-    r.annotate("Cell Export Count",  "offset", () => r.readInt32());
-    r.annotate("Cell Export Offset", "offset", () => r.readInt32(),
-      v => `0x${v.toString(16)}`);
-    r.annotate("Cell Import Count",  "offset", () => r.readInt32());
-    r.annotate("Cell Import Offset", "offset", () => r.readInt32(),
-      v => `0x${v.toString(16)}`);
+    r.annotate("Cell Export Count", () => r.readInt32());
+    r.annotate("Cell Export Offset", () => r.readInt32());
+    r.annotate("Cell Import Count", () => r.readInt32());
+    r.annotate("Cell Import Offset", () => r.readInt32());
   }
 
   // Metadata serialization offset — UE5 >= 1014
   if (fileVersionUE5 >= UE5_METADATA_SERIALIZATION_OFFSET) {
-    r.annotate("MetaData Offset", "offset", () => r.readInt32(),
-      v => `0x${v.toString(16)}`);
+    r.annotate("MetaData Offset", () => r.readInt32());
   }
 
-  r.annotate("Depends Offset", "offset", () => r.readInt32(),
-    v => `0x${v.toString(16)}`);
+  r.annotate("Depends Offset", () => r.readInt32());
 
   // Soft package references — UE4 >= 384
   if (fileVersionUE4 >= UE4_ADD_STRING_ASSET_REFERENCES_MAP) {
-    r.annotate("Soft Package References Count",  "offset", () => r.readInt32());
-    r.annotate("Soft Package References Offset", "offset", () => r.readInt32(),
-      v => `0x${v.toString(16)}`);
+    r.annotate("Soft Package References Count", () => r.readInt32());
+    r.annotate("Soft Package References Offset", () => r.readInt32());
   }
 
   // Searchable names offset — UE4 >= 510
   if (fileVersionUE4 >= UE4_ADDED_SEARCHABLE_NAMES) {
-    r.annotate("Searchable Names Offset", "offset", () => r.readInt32(),
-      v => `0x${v.toString(16)}`);
+    r.annotate("Searchable Names Offset", () => r.readInt32());
   }
 
-  r.annotate("Thumbnail Table Offset", "offset", () => r.readInt32(),
-    v => `0x${v.toString(16)}`);
+  r.annotate("Thumbnail Table Offset", () => r.readInt32());
 
   // Import type hierarchies (new in UE5 1018)
   if (fileVersionUE5 >= UE5_IMPORT_TYPE_HIERARCHIES) {
-    r.annotate("Import Type Hierarchies Count",  "offset", () => r.readInt32());
-    r.annotate("Import Type Hierarchies Offset", "offset", () => r.readInt32(),
-      v => `0x${v.toString(16)}`);
+    r.annotate("Import Type Hierarchies Count", () => r.readInt32());
+    r.annotate("Import Type Hierarchies Offset", () => r.readInt32());
   }
 
   // Legacy Guid — only present when fileVersionUE5 < PACKAGE_SAVED_HASH (1016)
   if (fileVersionUE5 < UE5_PACKAGE_SAVED_HASH) {
-    r.annotate("GUID (Legacy)", "guid", () => readFGuid(r), fGuidToString);
+    r.annotate("GUID (Legacy)", () => r.readFGuid());
   }
 
   // PersistentGuid — editor-only, present when fileVersionUE4 >= 518.
   // OwnerPersistentGuid was added at 518 and removed at 520 (NON_OUTER_PACKAGE_IMPORT).
   if (fileVersionUE4 >= UE4_ADDED_PACKAGE_OWNER) {
-    r.annotate("Persistent GUID", "guid", () => readFGuid(r), fGuidToString);
+    r.annotate("Persistent GUID", () => r.readFGuid());
     if (fileVersionUE4 < UE4_NON_OUTER_PACKAGE_IMPORT) {
-      r.annotate("Owner Persistent GUID", "guid", () => readFGuid(r), fGuidToString);
+      r.annotate("Owner Persistent GUID", () => r.readFGuid());
     }
   }
 
   // Generations — TArray<FGenerationInfo>, each 8 bytes (exportCount + nameCount)
-  r.annotateGroup("Generations", "version", () =>
-    readArray(r, readFGenerationInfo),
-    v => `${v.length} generation(s)`);
+  r.annotateGroup("Generations", () =>
+    r.readArray(rr => rr.readFGenerationInfo()));
 
   // Saved-by engine version
-  const [savedEngineVersion] = r.annotateGroup("Saved By Engine Version", "version", () =>
-    readFEngineVersion(r), fEngineVersionToString);
+  const [savedEngineVersion] = r.annotateGroup("Saved By Engine Version", () =>
+    r.readFEngineVersion());
 
   // Compatible-with engine version — UE4 >= 444
   if (fileVersionUE4 >= UE4_PACKAGE_SUMMARY_HAS_COMPATIBLE_ENGINE_VERSION) {
-    r.annotateGroup("Compatible With Engine Version", "version", () =>
-      readFEngineVersion(r), fEngineVersionToString);
+    r.annotateGroup("Compatible With Engine Version", () =>
+      r.readFEngineVersion());
   }
 
   // Compression flags (should be 0 in modern assets)
-  r.annotate("Compression Flags", "flags", () => r.readUint32(),
-    v => `0x${v.toString(16).padStart(8, "0")}`);
+  r.annotate("Compression Flags", () => r.readUint32());
 
   // Compressed chunks (should be empty in modern assets)
-  r.annotateGroup("Compressed Chunks", "bulk", () =>
-    readArray(r, rr => ({
+  r.annotateGroup("Compressed Chunks", () =>
+    r.readArray(rr => ({
       uncompressedOffset: rr.readInt32(),
       uncompressedSize:   rr.readInt32(),
       compressedOffset:   rr.readInt32(),
       compressedSize:     rr.readInt32(),
-    })),
-    v => `${v.length} chunk(s)`);
+    })));
 
-  r.annotate("Package Source", "flags", () => r.readUint32(),
-    v => `0x${v.toString(16).padStart(8, "0")}`);
+  r.annotate("Package Source", () => r.readUint32());
 
   // Additional packages to cook (legacy field, now always empty)
-  r.annotateGroup("Additional Packages To Cook", "string", () =>
-    readArray(r, readFString),
-    v => `${v.length} entries`);
+  r.annotateGroup("Additional Packages To Cook", () =>
+    r.readArray(rr => rr.readFString()));
 
   // NumTextureAllocations (removed in legacyFileVersion -7, but present in -6 and older)
   if (legacyFileVersion > -7) {
-    r.annotate("Num Texture Allocations", "offset", () => r.readInt32());
+    r.annotate("Num Texture Allocations", () => r.readInt32());
   }
 
-  const [assetRegistryDataOffset] = r.annotate("Asset Registry Data Offset", "offset",
-    () => r.readInt32(), v => `0x${v.toString(16)}`);
+  const [assetRegistryDataOffset] = r.annotate("Asset Registry Data Offset",
+    () => r.readInt32());
 
-  r.annotate("Bulk Data Start Offset", "bulk", () => r.readInt64(),
-    v => `0x${v.toString(16)}`);
+  r.annotate("Bulk Data Start Offset", () => r.readInt64());
 
   // World tile info offset — UE4 >= 224
   if (fileVersionUE4 >= UE4_WORLD_LEVEL_INFO) {
-    r.annotate("World Tile Info Data Offset", "offset", () => r.readInt32(),
-      v => `0x${v.toString(16)}`);
+    r.annotate("World Tile Info Data Offset", () => r.readInt32());
   }
 
   // Chunk IDs — UE4 >= 326 uses TArray<int32>, UE4 >= 278 uses single int32
   if (fileVersionUE4 >= UE4_CHANGED_CHUNKID_TO_BE_AN_ARRAY_OF_CHUNKIDS) {
-    r.annotateGroup("Chunk IDs", "offset", () =>
-      readArray(r, rr => rr.readInt32()),
-      v => `${v.length} chunks`);
+    r.annotateGroup("Chunk IDs", () =>
+      r.readArray(rr => rr.readInt32()));
   } else if (fileVersionUE4 >= UE4_ADDED_CHUNKID_TO_ASSETDATA_AND_UPACKAGE) {
-    r.annotate("Chunk ID", "offset", () => r.readInt32());
+    r.annotate("Chunk ID", () => r.readInt32());
   }
 
   // Preload dependency count + offset — UE4 >= 507
   if (fileVersionUE4 >= UE4_PRELOAD_DEPENDENCIES_IN_COOKED_EXPORTS) {
-    r.annotate("Preload Dependency Count",  "offset", () => r.readInt32());
-    r.annotate("Preload Dependency Offset", "offset", () => r.readInt32(),
-      v => `0x${v.toString(16)}`);
+    r.annotate("Preload Dependency Count", () => r.readInt32());
+    r.annotate("Preload Dependency Offset", () => r.readInt32());
   }
 
   // NamesReferencedFromExportDataCount — UE5 >= 1001
   if (fileVersionUE5 >= UE5_NAMES_REFERENCED_FROM_EXPORT_DATA) {
-    r.annotate("Names Referenced From Export Data Count", "offset", () => r.readInt32());
+    r.annotate("Names Referenced From Export Data Count", () => r.readInt32());
   }
 
   // PayloadTocOffset — UE5 >= 1002
   if (fileVersionUE5 >= UE5_PAYLOAD_TOC) {
-    r.annotate("Payload TOC Offset", "offset", () => r.readInt64(),
-      v => `0x${v.toString(16)}`);
+    r.annotate("Payload TOC Offset", () => r.readInt64());
   }
 
   // DataResourceOffset — UE5 >= 1009
   if (fileVersionUE5 >= UE5_DATA_RESOURCES) {
-    r.annotate("Data Resource Offset", "offset", () => r.readInt32(),
-      v => `0x${v.toString(16)}`);
+    r.annotate("Data Resource Offset", () => r.readInt32());
   }
 
   // ── Phase 2: Index tables ─────────────────────────────────────────────────
@@ -318,21 +282,21 @@ export function parseUAsset(buffer: ArrayBuffer): ParseResult {
   const names: string[] = [];
   if (nameCount > 0 && nameOffset > 0) {
     r.seek(nameOffset);
-    r.annotateGroup("Names Table", "name", () => {
+    r.annotateGroup("Names Table", () => {
       for (let i = 0; i < nameCount; i++) {
-        const [name] = r.annotateGroup(`Name[${i}]`, "name", () => {
-          const s = readFString(r);
+        const [name] = r.annotateGroup(`Name[${i}]`, () => {
+          const s = r.readFString();
           // Hash(es) follow each name entry. UE4 >= VER_UE4_NAME_HASHES_SERIALIZED (504):
           // 2 × uint16 = 4 bytes (non-case-preserving + case-preserving hash).
           // All files we support (>= 4.27 = fileVersionUE4 >= ~519) have hashes.
           r.readUint16(); // non-case-preserving hash
           r.readUint16(); // case-preserving hash
           return s;
-        }, v => JSON.stringify(v));
+        });
         names.push(name);
       }
       return names;
-    }, v => `${v.length} names`);
+    });
   }
 
   // Imports table.
@@ -343,9 +307,9 @@ export function parseUAsset(buffer: ArrayBuffer): ParseResult {
   const imports: FObjectImport[] = [];
   if (importCount > 0 && importOffset > 0) {
     r.seek(importOffset);
-    r.annotateGroup("Imports Table", "import", () => {
+    r.annotateGroup("Imports Table", () => {
       for (let i = 0; i < importCount; i++) {
-        r.annotateGroup(`Import[${i}]`, "import", () => {
+        r.annotateGroup(`Import[${i}]`, () => {
           const classPackageIdx = r.readInt32();
           /* classPackageNum = */ r.readInt32();
           const classNameIdx    = r.readInt32();
@@ -373,15 +337,10 @@ export function parseUAsset(buffer: ArrayBuffer): ParseResult {
           };
           imports.push(imp);
           return imp;
-        }, imp => {
-          const pkg  = resolveName(names, imp.classPackage);
-          const cls  = resolveName(names, imp.className);
-          const name = resolveName(names, imp.objectName);
-          return `${pkg}.${cls} '${name}'`;
         });
       }
       return imports;
-    }, v => `${v.length} imports`);
+    });
   }
 
   // Exports table.
@@ -398,9 +357,9 @@ export function parseUAsset(buffer: ArrayBuffer): ParseResult {
   const exports: FObjectExport[] = [];
   if (exportCount > 0 && exportOffset > 0) {
     r.seek(exportOffset);
-    r.annotateGroup("Exports Table", "export", () => {
+    r.annotateGroup("Exports Table", () => {
       for (let i = 0; i < exportCount; i++) {
-        r.annotateGroup(`Export[${i}]`, "export", () => {
+        r.annotateGroup(`Export[${i}]`, () => {
           const classIndex  = r.readInt32();
           const superIndex  = r.readInt32();
           const templateIndex = (fileVersionUE4 >= UE4_TEMPLATEINDEX_IN_COOKED_EXPORTS)
@@ -423,7 +382,7 @@ export function parseUAsset(buffer: ArrayBuffer): ParseResult {
           let packageGuid = undefined as any;
           let exportPackageFlags = 0;
           if (fileVersionUE5 < UE5_REMOVE_OBJECT_EXPORT_PACKAGE_GUID) {
-            packageGuid = readFGuid(r);
+            packageGuid = r.readFGuid();
             exportPackageFlags = r.readUint32();
           }
 
@@ -470,14 +429,10 @@ export function parseUAsset(buffer: ArrayBuffer): ParseResult {
           };
           exports.push(exp);
           return exp;
-        }, exp => {
-          const name = resolveName(names, exp.objectName);
-          const cls  = resolveClass(imports, exports, names, exp.classIndex);
-          return `${cls} '${name}' @ 0x${exp.serialOffset.toString(16)} +${exp.serialSize}B`;
         });
       }
       return exports;
-    }, v => `${v.length} exports`);
+    });
   }
 
   // ── Phase 3: Export data ──────────────────────────────────────────────────
