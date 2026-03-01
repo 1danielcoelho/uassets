@@ -11,7 +11,9 @@
       "Bash(do echo \"=== $f ===\")",
       "Bash(xxd:*)",
       "Bash(dd:*)",
-      "Bash(~/.bun/bin/bun:*)"
+      "Bash(~/.bun/bin/bun:*)",
+      "Bash(wc:*)",
+      "Read(//home/daniel/.bun/bin/**)"
     ],
     "additionalDirectories": [
       "/tmp"

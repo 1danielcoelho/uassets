@@ -59,6 +59,9 @@ console.log(`  Package     : ${summary.packageName}`);
 console.log(`  Engine      : ${summary.engineVersion}`);
 if (summary.customVersions.length > 0) {
   console.log(`  Custom vers : ${summary.customVersions.length} entries`);
+  for (const cv of summary.customVersions) {
+    console.log(`    ${cv.name}  v${cv.version}`);
+  }
 }
 if (summary.properties.length > 0) {
   for (const p of summary.properties) {
@@ -147,7 +150,9 @@ function stringifyValue(range: ByteRange): string {
     case "bytes":   return Array.from(range.value).map(b => b.toString(16).padStart(2, "0")).join("");
     case "string":  return range.value;
     case "guid":    return fGuidToString(range.value);
-    case "group":   return "";
+    case "group":
+      if (typeof range.value === "string") return range.value;
+      return "";
   }
 }
 

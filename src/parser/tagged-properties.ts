@@ -2,42 +2,59 @@
  * FPropertyTag parsing for UE5 tagged-property format.
  *
  * References:
- *   ue_source_dump/PropertyTag.cpp      — tag wire format
- *   ue_source_dump/PropertyTypeName.cpp — FPropertyTypeName binary layout
+ *   UnrealEngine-5.7.3-release/Engine/Source/Runtime/CoreUObject/Private/UObject/PropertyTag.cpp
+ *   UnrealEngine-5.7.3-release/Engine/Source/Runtime/CoreUObject/Private/UObject/PropertyTypeName.cpp
+ *   UnrealEngine-5.7.3-release/Engine/Source/Runtime/CoreUObject/Private/UObject/Class.cpp
+ *     — UStruct::SerializeVersionedTaggedProperties()
  *
- * Wire format for UE5 >= PROPERTY_TAG_COMPLETE_TYPE_NAME (version 1012):
+ * === Wire format for UE5 >= PROPERTY_TAG_COMPLETE_TYPE_NAME (version 1012) ===
  *
- *   loop:
- *     FName name             (2 × int32: nameIndex, instanceNumber)
- *       → if resolves to "None", stop
- *     FPropertyTypeName type (N nodes × 12 bytes; N determined by InnerCount fields)
- *     int32 size             (value byte count, EXCLUDING tag header)
- *     uint8 flags            (EPropertyTagFlags bitmask)
- *       HasArrayIndex     0x01  → int32 arrayIndex
- *       HasPropertyGuid   0x02  → FGuid (16 bytes)
- *       HasPropertyExt    0x04  → uint8 extFlags; if OverridableInfo 0x02: +2 bytes
- *     [value: size bytes]
+ * Preamble (for UClass objects, i.e. non-structs, when fileVersionUE5 >= 1011):
+ *   uint8 SerializationControlExtension
+ *     0x02 OverridableSerializationInformation → uint8 OverridableOperation
  *
- * Wire format for older packages (version < 1012):
+ * Tag loop:
+ *   FName name  (2 × int32: nameIndex, instanceNumber)
+ *     → if resolves to "None", stop (the FName itself is the terminator)
+ *   FPropertyTypeName type  (N nodes × 12 bytes; N determined by InnerCount fields)
+ *   int32 size   (value byte count, EXCLUDING tag header)
+ *   uint8 flags  (EPropertyTagFlags bitmask):
+ *     HasArrayIndex             0x01  → int32 arrayIndex
+ *     HasPropertyGuid           0x02  → FGuid (16 bytes)
+ *     HasPropertyExtensions     0x04  → uint8 extFlags;
+ *                                         if OverridableInformation 0x02: +uint8 + uint8
+ *     HasBinaryOrNativeSerialize 0x08 (value still has `size` bytes)
+ *     BoolTrue                  0x10  (bool value encoded in flags; size == 0)
+ *     SkippedSerialize          0x20  (value still has `size` bytes; just skipped during load)
+ *   [value: size bytes]
+ *
+ * === Wire format for older packages (version < 1012) ===
  *   FName name, FName type, int32 size, int32 arrayIndex,
- *   type-specific header, uint8 hasPropertyGuid, [FGuid], [value]
+ *   type-specific header, uint8 hasPropertyGuid, [FGuid], [value: size bytes]
  */
 
 import { BinaryReader } from "./reader.ts";
 
 // EPropertyTagFlags
-const FLAG_HAS_ARRAY_INDEX   = 0x01;
-const FLAG_HAS_PROPERTY_GUID = 0x02;
-const FLAG_HAS_PROPERTY_EXT  = 0x04;
+const FLAG_HAS_ARRAY_INDEX            = 0x01;
+const FLAG_HAS_PROPERTY_GUID          = 0x02;
+const FLAG_HAS_PROPERTY_EXTENSIONS    = 0x04;
+const FLAG_HAS_BINARY_OR_NATIVE       = 0x08;
+// BoolTrue = 0x10  (bool value is in flags, not in value bytes — size will be 0)
+// SkippedSerialize = 0x20 (size bytes present but skipped)
 
 // EPropertyTagExtension
 const EXT_OVERRIDABLE_INFO = 0x02;
 
-// UE5 version where the new compact tag format was introduced
-const UE5_PROPERTY_TAG_COMPLETE_TYPE_NAME = 1012;
+// EClassSerializationControlExtension
+const CTRL_EXT_OVERRIDABLE_SERIALIZATION = 0x02;
+
+// UE5 version thresholds (counted from INITIAL_VERSION = 1000)
+const UE5_PROPERTY_TAG_EXTENSION_AND_OVERRIDABLE_SERIALIZATION = 1011;
+const UE5_PROPERTY_TAG_COMPLETE_TYPE_NAME                      = 1012;
 
 /**
- * Read nodes of an FPropertyTypeName from the binary archive (no-label variant).
+ * Read nodes of an FPropertyTypeName from the binary archive (unlabeled).
  *
  * Each node: FName (2 × int32) + int32 InnerCount = 12 bytes.
  * The loop starts with Remaining = 1 and runs until Remaining reaches 0.
@@ -49,8 +66,8 @@ function readTypeName(r: BinaryReader, names: string[]): string {
   let rootName = "Unknown";
   while (remaining > 0) {
     const ni = r.readInt32();
-    r.readInt32(); // instance number (ignore)
-    const ic = r.readInt32();
+    r.readInt32(); // instance number
+    const ic = r.readInt32(); // InnerCount
     if (first) {
       rootName = names[ni] ?? `<name#${ni}>`;
       first = false;
@@ -63,19 +80,34 @@ function readTypeName(r: BinaryReader, names: string[]): string {
 /**
  * Parse the tagged-property stream for one export's property region.
  *
- * @param r           Binary reader, cursor at the start of the property region.
- * @param names       Package name table (resolved strings).
- * @param endOffset   Absolute byte offset of the end of the property region.
+ * The reader must be positioned at `absScriptStart` (start of the script region).
+ *
+ * @param r               Binary reader cursor at start of the property region.
+ * @param names           Package name table (resolved strings).
+ * @param endOffset       Absolute byte offset of the END of the property region.
  * @param fileVersionUE5  UE5 object version (e.g. 1018 for UE5.7.3).
+ * @param isUClass        True for regular UObject instances (always true for exported objects).
  */
 export function parseTaggedProperties(
   r: BinaryReader,
   names: string[],
   endOffset: number,
   fileVersionUE5: number,
+  isUClass: boolean = true,
 ): void {
   const newFormat = fileVersionUE5 >= UE5_PROPERTY_TAG_COMPLETE_TYPE_NAME;
 
+  // ── Preamble: SerializationControlExtension (UE5 >= 1011, UClass objects only) ──
+  if (isUClass && fileVersionUE5 >= UE5_PROPERTY_TAG_EXTENSION_AND_OVERRIDABLE_SERIALIZATION) {
+    r.group("Serialization Control Extensions", () => {
+      const ctrlExt = r.readUint8("Control Extension Flags");
+      if (ctrlExt & CTRL_EXT_OVERRIDABLE_SERIALIZATION) {
+        r.readUint8("Overridable Operation");
+      }
+    });
+  }
+
+  // ── Property tag loop ──────────────────────────────────────────────────────
   while (r.pos < endOffset) {
     const savedPos = r.pos;
 
@@ -85,7 +117,7 @@ export function parseTaggedProperties(
     const propName = names[nameIdx] ?? `<name#${nameIdx}>`;
 
     if (propName === "None") {
-      // Annotate the 8-byte terminator and exit.
+      // Annotate the 8-byte "None" FName terminator.
       r.seek(savedPos);
       r.readBytes(8, "None (Properties End)");
       break;
@@ -110,7 +142,7 @@ export function parseTaggedProperties(
 
         if (flags & FLAG_HAS_ARRAY_INDEX)   r.readInt32("Array Index");
         if (flags & FLAG_HAS_PROPERTY_GUID) r.readFGuid("Property GUID");
-        if (flags & FLAG_HAS_PROPERTY_EXT) {
+        if (flags & FLAG_HAS_PROPERTY_EXTENSIONS) {
           r.group("Extensions", () => {
             const extFlags = r.readUint8("Extension Flags");
             if (extFlags & EXT_OVERRIDABLE_INFO) {
@@ -119,11 +151,13 @@ export function parseTaggedProperties(
             }
           });
         }
-
+        // HasBinaryOrNativeSerialize (0x08): value bytes still present.
+        // BoolTrue (0x10): bool value is in flags, size == 0, no value bytes.
+        // SkippedSerialize (0x20): size bytes present, just gets skipped by loader.
         if (size > 0) r.readBytes(size, `Value (${typeName})`);
       });
     } else {
-      // Old format (pre-1012): separate FName fields for type + inline header data.
+      // Old format (pre-1012): separate FName fields for type.
       r.group(`Property: ${propName}`, () => {
         r.readInt32("Name Index");
         r.readInt32(); // instance number
@@ -135,7 +169,7 @@ export function parseTaggedProperties(
         const size = r.readInt32("Size");
         r.readInt32("Array Index");
 
-        // Type-specific tag header (old format).
+        // Type-specific header data in the old format.
         switch (typeName) {
           case "StructProperty":
             r.readInt32(); r.readInt32(); // struct name FName
@@ -167,8 +201,8 @@ export function parseTaggedProperties(
     }
   }
 
-  // Annotate any remaining bytes after the "None" terminator (padding / native tail).
+  // Annotate any remaining bytes in the script region (padding / native tail).
   if (r.pos < endOffset) {
-    r.readBytes(endOffset - r.pos, "Remaining Export Data");
+    r.readBytes(endOffset - r.pos, "Remaining Script Data");
   }
 }

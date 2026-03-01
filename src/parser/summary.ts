@@ -61,6 +61,9 @@ const UE4_64BIT_EXPORTMAP_SERIALSIZES                   = 511;
 const UE4_ADDED_PACKAGE_SUMMARY_LOCALIZATION_ID         = 516;
 const UE4_ADDED_PACKAGE_OWNER                           = 518;
 const UE4_NON_OUTER_PACKAGE_IMPORT                      = 520;
+const UE4_ASSETREGISTRY_DEPENDENCYFLAGS                 = 519;
+
+const PKG_FILTER_EDITOR_ONLY = 0x80000000;
 
 // ── Main parser ───────────────────────────────────────────────────────────────
 
@@ -107,9 +110,10 @@ export function parseUAsset(buffer: ArrayBuffer): ParseResult {
       const result: { name: string; version: number }[] = [];
       for (let i = 0; i < count; i++) {
         const cv = r.group(`Custom Version [${i}]`, () => {
-          const guid = r.readFGuid();
-          const ver  = r.readInt32();
-          return { guid, version: ver };
+          const guid = r.readFGuid("GUID");
+          const ver  = r.readInt32("Version");
+          const guidStr = fGuidToString(guid);
+          return { guid, version: ver, label: `${guidStr} v${ver}` };
         });
         result.push({ name: fGuidToString(cv.guid), version: cv.version });
       }
@@ -122,8 +126,8 @@ export function parseUAsset(buffer: ArrayBuffer): ParseResult {
     r.readInt32("Total Header Size");
   }
 
-  const packageName = r.readFString("Package Name");
-  r.readUint32("Package Flags");
+  const packageName  = r.readFString("Package Name");
+  const packageFlags = r.readUint32("Package Flags");
 
   const nameCount  = r.readInt32("Name Count");
   const nameOffset = r.readInt32("Name Offset");
@@ -206,17 +210,31 @@ export function parseUAsset(buffer: ArrayBuffer): ParseResult {
   }
 
   // Generations — TArray<FGenerationInfo>, each 8 bytes (exportCount + nameCount)
-  r.group("Generations", () =>
-    r.readArray(rr => rr.readFGenerationInfo()));
+  r.group("Generations", () => {
+    const count = r.readInt32("Count");
+    for (let i = 0; i < count; i++) {
+      r.group(`Generation[${i}]`, () => {
+        const exportCount = r.readInt32("Export Count");
+        const nameCount   = r.readInt32("Name Count");
+        return `exports=${exportCount} names=${nameCount}`;
+      });
+    }
+  });
 
   // Saved-by engine version
-  const savedEngineVersion = r.group("Saved By Engine Version", () =>
-    r.readFEngineVersion());
+  let savedEngineVersionStr = "";
+  r.group("Saved By Engine Version", () => {
+    const v = r.readFEngineVersion();
+    savedEngineVersionStr = fEngineVersionToString(v);
+    return savedEngineVersionStr;
+  });
 
   // Compatible-with engine version — UE4 >= 444
   if (fileVersionUE4 >= UE4_PACKAGE_SUMMARY_HAS_COMPATIBLE_ENGINE_VERSION) {
-    r.group("Compatible With Engine Version", () =>
-      r.readFEngineVersion());
+    r.group("Compatible With Engine Version", () => {
+      const v = r.readFEngineVersion();
+      return fEngineVersionToString(v);
+    });
   }
 
   // Compression flags (should be 0 in modern assets)
@@ -243,7 +261,7 @@ export function parseUAsset(buffer: ArrayBuffer): ParseResult {
   }
 
   const assetRegistryDataOffset = r.readInt32("Asset Registry Data Offset");
-  r.readInt64("Bulk Data Start Offset");
+  const bulkDataStartOffset = Number(r.readInt64("Bulk Data Start Offset"));
 
   // World tile info offset — UE4 >= 224
   let worldTileInfoOffset = 0;
@@ -272,8 +290,9 @@ export function parseUAsset(buffer: ArrayBuffer): ParseResult {
   }
 
   // PayloadTocOffset — UE5 >= 1002
+  let payloadTocOffset = -1;
   if (fileVersionUE5 >= UE5_PAYLOAD_TOC) {
-    r.readInt64("Payload TOC Offset");
+    payloadTocOffset = Number(r.readInt64("Payload TOC Offset"));
   }
 
   // DataResourceOffset — UE5 >= 1009
@@ -291,12 +310,12 @@ export function parseUAsset(buffer: ArrayBuffer): ParseResult {
     r.group("Names Table", () => {
       for (let i = 0; i < nameCount; i++) {
         const name = r.group(`Name[${i}]`, () => {
-          const s = r.readFString();
+          const s = r.readFString("String");
           // Hash(es) follow each name entry. UE4 >= VER_UE4_NAME_HASHES_SERIALIZED (504):
           // 2 × uint16 = 4 bytes (non-case-preserving + case-preserving hash).
           // All files we support (>= 4.27 = fileVersionUE4 >= ~519) have hashes.
-          r.readUint16(); // non-case-preserving hash
-          r.readUint16(); // case-preserving hash
+          r.readUint16("Hash (non-preserving)");
+          r.readUint16("Hash (preserving)");
           return s;
         });
         names.push(name);
@@ -457,12 +476,20 @@ export function parseUAsset(buffer: ArrayBuffer): ParseResult {
 
   // Depends Map — one TArray<FPackageIndex> per export.
   // Each entry lists the package indices that must be loaded before this export.
+  // FPackageIndex: positive = export (1-based), negative = import (1-based), 0 = none.
   if (dependsOffset > 0 && exportCount > 0) {
     r.seek(dependsOffset);
     r.group("Depends Map", () => {
       for (let i = 0; i < exportCount; i++) {
-        r.group(`Depends[${i}]`, () =>
-          r.readArray(rr => rr.readInt32()));
+        r.group(`Depends[${i}]`, () => {
+          const count = r.readInt32();
+          const deps: number[] = [];
+          for (let j = 0; j < count; j++) {
+            const idx = r.readInt32(`Dep[${j}]`);
+            deps.push(idx);
+          }
+          return deps.length > 0 ? deps.join(", ") : "(none)";
+        });
       }
     });
   }
@@ -474,11 +501,14 @@ export function parseUAsset(buffer: ArrayBuffer): ParseResult {
     r.group("Soft Object Paths", () => {
       for (let i = 0; i < softObjectPathsCount; i++) {
         r.group(`SoftObjectPath[${i}]`, () => {
-          r.readInt32("Package Name Index");
-          r.readInt32(); // package name number
-          r.readInt32("Asset Name Index");
-          r.readInt32(); // asset name number
-          r.readFString("Sub Path");
+          const pkgIdx   = r.readInt32("Package Name Index");
+                           r.readInt32(); // package name number
+          const assetIdx = r.readInt32("Asset Name Index");
+                           r.readInt32(); // asset name number
+          const subPath  = r.readFString("Sub Path");
+          const pkg   = resolveName(names, pkgIdx);
+          const asset = resolveName(names, assetIdx);
+          return subPath ? `${pkg}.${asset}:${subPath}` : `${pkg}.${asset}`;
         });
       }
     });
@@ -491,11 +521,14 @@ export function parseUAsset(buffer: ArrayBuffer): ParseResult {
     r.group("Soft Package References", () => {
       for (let i = 0; i < softPackageRefsCount; i++) {
         r.group(`SoftRef[${i}]`, () => {
-          r.readInt32("Package Name Index");
-          r.readInt32(); // package name number
-          r.readInt32("Asset Name Index");
-          r.readInt32(); // asset name number
-          r.readFString("Sub Path");
+          const pkgIdx   = r.readInt32("Package Name Index");
+                           r.readInt32(); // package name number
+          const assetIdx = r.readInt32("Asset Name Index");
+                           r.readInt32(); // asset name number
+          const subPath  = r.readFString("Sub Path");
+          const pkg   = resolveName(names, pkgIdx);
+          const asset = resolveName(names, assetIdx);
+          return subPath ? `${pkg}.${asset}:${subPath}` : `${pkg}.${asset}`;
         });
       }
     });
@@ -599,7 +632,7 @@ export function parseUAsset(buffer: ArrayBuffer): ParseResult {
       dependsOffset, softPackageRefsOffset, searchableNamesOffset,
       thumbnailTableOffset, assetRegistryDataOffset, worldTileInfoOffset,
       preloadDepOffset, dataResourceOffset, importTypeHierarchiesOffset,
-      metadataOffset, r.byteLength, // file end as sentinel
+      metadataOffset, bulkDataStartOffset, payloadTocOffset, r.byteLength,
     ].filter(o => o > 0).sort((a, b) => a - b);
 
     const blobSize = (offset: number): number => {
@@ -620,15 +653,89 @@ export function parseUAsset(buffer: ArrayBuffer): ParseResult {
     }
 
     // Thumbnail Table — editor-only asset preview thumbnails
+    // Layout: image data blobs are stored BEFORE the TOC. The TOC (at thumbnailTableOffset)
+    // has count + per-entry (className, objectPath, fileOffset). fileOffset points back into
+    // the image data region that precedes the TOC.
     if (thumbnailTableOffset > 0) {
-      const size = blobSize(thumbnailTableOffset);
-      if (size > 0) { r.seek(thumbnailTableOffset); r.readBytes(size, "Thumbnail Table"); }
+      r.seek(thumbnailTableOffset);
+      const thumbEntries: { objectPath: string; fileOffset: number }[] = [];
+      r.group("Thumbnail Table (TOC)", () => {
+        const count = r.readInt32("Thumbnail Count");
+        for (let i = 0; i < count; i++) {
+          r.group(`Thumbnail TOC[${i}]`, () => {
+            const className  = r.readFString("Object Class Name");
+            const objectPath = r.readFString("Object Path");
+            const fileOffset = r.readInt32("File Offset");
+            thumbEntries.push({ objectPath, fileOffset });
+            return `${objectPath} @ 0x${fileOffset.toString(16)}`;
+          });
+        }
+        return `${thumbEntries.length} thumbnail(s)`;
+      });
+
+      // Parse the actual compressed image data (stored before the TOC).
+      for (let i = 0; i < thumbEntries.length; i++) {
+        const { objectPath, fileOffset } = thumbEntries[i]!;
+        if (fileOffset > 0 && fileOffset < r.byteLength) {
+          r.seek(fileOffset);
+          r.group(`Thumbnail Data [${i}]: ${objectPath}`, () => {
+            const width  = r.readInt32("Image Width");
+            const rawH   = r.readInt32("Image Height"); // negative = JPEG, positive = PNG
+            const isJPEG = rawH < 0;
+            const absH   = Math.abs(rawH);
+            if (width > 0 && absH > 0) {
+              const dataSize = r.readInt32("Compressed Data Size");
+              if (dataSize > 0) {
+                r.readBytes(dataSize, isJPEG ? "JPEG Data" : "PNG Data");
+              }
+            }
+            return `${width}×${absH} ${isJPEG ? "JPEG" : "PNG"}`;
+          });
+        }
+      }
     }
 
-    // Asset Registry Data — content browser metadata
+    // Asset Registry Data — content browser metadata + dependency flags
+    // Format (UE4 >= 519, not cooked):
+    //   int64 DependencyDataOffset
+    //   int32 ObjectCount
+    //   per object: FString path, FString class, int32 tagCount, per tag: FString key + value
+    //   [at DependencyDataOffset]: TBitArray ImportUsedInGame + TBitArray SoftPackageUsedInGame + more
     if (assetRegistryDataOffset > 0) {
-      const size = blobSize(assetRegistryDataOffset);
-      if (size > 0) { r.seek(assetRegistryDataOffset); r.readBytes(size, "Asset Registry Data"); }
+      r.seek(assetRegistryDataOffset);
+      r.group("Asset Registry Data", () => {
+        const hasNewFormat =
+          fileVersionUE4 >= UE4_ASSETREGISTRY_DEPENDENCYFLAGS &&
+          !(packageFlags & PKG_FILTER_EDITOR_ONLY);
+        let dependencyDataOffset = -1;
+        if (hasNewFormat) {
+          dependencyDataOffset = Number(r.readInt64("Dependency Data Offset"));
+        }
+        const objectCount = r.readInt32("Object Count");
+        for (let i = 0; i < objectCount; i++) {
+          r.group(`ARObject[${i}]`, () => {
+            const objectPath = r.readFString("Object Path");
+            const className  = r.readFString("Class Name");
+            const tagCount   = r.readInt32("Tag Count");
+            for (let j = 0; j < tagCount; j++) {
+              r.group(`Tag[${j}]`, () => {
+                const key   = r.readFString("Key");
+                const value = r.readFString("Value");
+                return `${key} = ${value}`;
+              });
+            }
+            return `${objectPath} (${className})`;
+          });
+        }
+        // Dependency data: TBitArray per import/soft-package-ref (opaque, complex format)
+        if (hasNewFormat && dependencyDataOffset > 0 && dependencyDataOffset < r.byteLength) {
+          r.seek(dependencyDataOffset);
+          const depSize = blobSize(dependencyDataOffset);
+          if (depSize > 0) {
+            r.readBytes(depSize, "Asset Registry Dependency Data");
+          }
+        }
+      });
     }
 
     // World Tile Info — UE4 >= 224 (level streaming metadata)
@@ -637,10 +744,108 @@ export function parseUAsset(buffer: ArrayBuffer): ParseResult {
       if (size > 0) { r.seek(worldTileInfoOffset); r.readBytes(size, "World Tile Info Data"); }
     }
 
+    // Exports footer tag — 4-byte PACKAGE_FILE_TAG written before the PackageTrailer.
+    // Written immediately before PayloadTocOffset when a PackageTrailer exists.
+    if (bulkDataStartOffset > 0 && payloadTocOffset > 0 &&
+        payloadTocOffset === bulkDataStartOffset + 4) {
+      r.seek(bulkDataStartOffset);
+      r.readUint32("Exports Footer Tag");
+    }
+
+    // Package Trailer — UE5 >= 1002 (bulk/payload data in new format)
+    // Layout: FHeader (28 + NumPayloads*49 bytes) | payload blobs | FFooter (20 bytes)
+    // FLookupTableEntry: FIoHash(20) + int64 OffsetInFile + int64 CompressedSize +
+    //                    uint64 RawSize + uint16 Flags + uint16 FilterFlags + uint8 AccessMode = 49 bytes
+    if (payloadTocOffset > 0 && payloadTocOffset < r.byteLength) {
+      r.seek(payloadTocOffset);
+      r.group("Package Trailer", () => {
+        const headerTag         = r.readBytes(8, "Header Tag");
+        const trailerVersion    = r.readInt32("Version");
+        const headerLength      = r.readUint32("Header Length");
+        const payloadsDataLen   = Number(r.readUint64("Payloads Data Length"));
+        const numPayloads       = r.readInt32("Num Payloads");
+
+        const payloadEntries: { id: string; offset: number; compSize: number; rawSize: bigint }[] = [];
+        for (let i = 0; i < numPayloads; i++) {
+          r.group(`Payload[${i}]`, () => {
+            const id          = Array.from(r.readBytes(20)).map(b => b.toString(16).padStart(2, "0")).join("");
+            const offsetInFile = Number(r.readInt64("Offset In File"));
+            const compSize    = Number(r.readInt64("Compressed Size"));
+            const rawSize     = r.readUint64("Raw Size");
+            r.readUint16("Flags");
+            r.readUint16("Filter Flags");
+            r.readUint8("Access Mode");
+            payloadEntries.push({ id, offset: offsetInFile, compSize, rawSize });
+            return `${id.slice(0, 16)}… ${compSize}B compressed, ${rawSize}B raw`;
+          });
+        }
+
+        // Payload data blobs (local entries)
+        const payloadDataStart = payloadTocOffset + headerLength;
+        for (let i = 0; i < payloadEntries.length; i++) {
+          const entry = payloadEntries[i]!;
+          if (entry.offset >= 0 && entry.compSize > 0) {
+            r.seek(payloadDataStart + entry.offset);
+            r.readBytes(entry.compSize, `Payload Data [${i}]`);
+          }
+        }
+
+        // Footer (20 bytes: uint64 Tag + uint64 TrailerLength + uint32 PackageTag)
+        const footerOffset = payloadDataStart + payloadsDataLen;
+        if (footerOffset < r.byteLength) {
+          r.seek(footerOffset);
+          r.group("Footer", () => {
+            r.readBytes(8, "Footer Tag");
+            r.readUint64("Trailer Length");
+            r.readUint32("Package Tag");
+          });
+        }
+      });
+    }
+
     // Metadata — UE5 >= 1014 (editor asset metadata)
+    // Format:
+    //   int32 NumObjectMetaDataMap
+    //   int32 NumRootMetaDataMap
+    //   per ObjectMeta: FSoftObjectPath (FTopLevelAssetPath = 4 int32, FString) + TMap<FName,FString>
+    //   per RootMeta: FName (2 int32) + FString
     if (metadataOffset > 0) {
-      const size = blobSize(metadataOffset);
-      if (size > 0) { r.seek(metadataOffset); r.readBytes(size, "Metadata"); }
+      r.seek(metadataOffset);
+      r.group("Metadata", () => {
+        const numObjectMeta = r.readInt32("Num Object Metadata Entries");
+        const numRootMeta   = r.readInt32("Num Root Metadata Entries");
+        for (let i = 0; i < numObjectMeta; i++) {
+          r.group(`ObjectMeta[${i}]`, () => {
+            // FSoftObjectPath: FTopLevelAssetPath (2 × FName = 4 × int32) + FString subpath
+            const pkgNameIdx = r.readInt32("Package Name Index");
+            r.readInt32(); // package name number
+            const assetIdx   = r.readInt32("Asset Name Index");
+            r.readInt32(); // asset name number
+            const subPath    = r.readFString("Sub Path");
+            // TMap<FName, FString>: int32 count + per-entry: FName (2 int32) + FString
+            const mapCount = r.readInt32("Tag Count");
+            for (let j = 0; j < mapCount; j++) {
+              r.group(`Tag[${j}]`, () => {
+                const keyIdx = r.readInt32("Key Index");
+                r.readInt32(); // key name number
+                const value  = r.readFString("Value");
+                return `${resolveName(names, keyIdx)} = ${value}`;
+              });
+            }
+            const pkg   = resolveName(names, pkgNameIdx);
+            const asset = resolveName(names, assetIdx);
+            return subPath ? `${pkg}.${asset}:${subPath}` : `${pkg}.${asset}`;
+          });
+        }
+        for (let i = 0; i < numRootMeta; i++) {
+          r.group(`RootMeta[${i}]`, () => {
+            const keyIdx = r.readInt32("Key Index");
+            r.readInt32(); // key name number
+            const value  = r.readFString("Value");
+            return `${resolveName(names, keyIdx)} = ${value}`;
+          });
+        }
+      });
     }
   }
 
@@ -670,7 +875,7 @@ export function parseUAsset(buffer: ArrayBuffer): ParseResult {
   const summary: AssetSummary = {
     assetClass,
     packageName,
-    engineVersion: fEngineVersionToString(savedEngineVersion),
+    engineVersion: savedEngineVersionStr,
     customVersions,
     properties: [],
     nameCount: names.length,

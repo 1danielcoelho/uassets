@@ -10,7 +10,7 @@
 import { BinaryReader } from "./reader.ts";
 import { parseTaggedProperties } from "./tagged-properties.ts";
 
-// UE5 version threshold for script serialization offsets.
+// UE5 version thresholds
 const UE5_SCRIPT_SERIALIZATION_OFFSET = 1010;
 
 type ExportParser = (
@@ -55,7 +55,7 @@ export function dispatchExport(
   }
 
   // Generic fallback: parse tagged properties if script offset bounds are available.
-  if (fileVersionUE5 >= UE5_SCRIPT_SERIALIZATION_OFFSET && scriptEnd > scriptStart && false) {
+  if (fileVersionUE5 >= UE5_SCRIPT_SERIALIZATION_OFFSET && scriptEnd > scriptStart) {
     const absScriptStart = offset + scriptStart;
     const absScriptEnd   = offset + scriptEnd;
 
@@ -65,7 +65,7 @@ export function dispatchExport(
       r.readBytes(scriptStart, "Export Header");
     }
 
-    // Tagged properties.
+    // Tagged properties (includes SerializationControlExtension preamble for UE5 >= 1011).
     r.seek(absScriptStart);
     parseTaggedProperties(r, names, absScriptEnd, fileVersionUE5);
 

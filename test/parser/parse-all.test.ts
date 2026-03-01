@@ -9,8 +9,8 @@
 
 import { test, expect } from "bun:test";
 import { Glob } from "bun";
-import { parseUAsset } from "../src/parser/summary.ts";
-import type { ParseResult, ByteRange } from "../src/types.ts";
+import { parseUAsset } from "../../src/parser/summary.ts";
+import type { ParseResult, ByteRange } from "../../src/types.ts";
 
 // ── Asset discovery ───────────────────────────────────────────────────────────
 
