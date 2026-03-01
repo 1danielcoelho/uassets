@@ -55,7 +55,7 @@ export function dispatchExport(
   }
 
   // Generic fallback: parse tagged properties if script offset bounds are available.
-  if (fileVersionUE5 >= UE5_SCRIPT_SERIALIZATION_OFFSET && scriptEnd > scriptStart) {
+  if (fileVersionUE5 >= UE5_SCRIPT_SERIALIZATION_OFFSET && scriptEnd > scriptStart && false) {
     const absScriptStart = offset + scriptStart;
     const absScriptEnd   = offset + scriptEnd;
 

@@ -1,7 +1,6 @@
 # General tips and guidelines
 
-* The assets and code in this project largely follow Unreal Engine 5.7.3, which can be different from what was in your training data. Be careful with your assumptions! If at any time you are in doubt, *CHECK THE SOURCE CODE* and don't just assume that you did!
-* A lot of the relevant source files for 5.7.3 are in `./ue_source_dump`. If you need to read a file or UE class that is not present there, stop everything and request me that file and I will get it for you. I would much rather you asked me for a file than spend a ton of time debugging with false assumptions
+* The assets and code in this project largely follow Unreal Engine 5.7.3 (available at `./UnrealEngine-5.7.3-release`), which can be different from what was in your training data. Be careful with your assumptions! If at any time you are in doubt, *CHECK THE SOURCE CODE* and don't just assume that you did!
 * This file is your main memory for this project, and includes a section below for `Current Plan`. Whenever you progress on the plan, make sure do update this file as well with at least a summary of the actual current plan, both with your findings and the next steps.
 
 # UAsset Viewer
