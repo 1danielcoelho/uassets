@@ -6,7 +6,15 @@
       "Bash(for f in test/assets/5_7_3/*.uasset test/assets/5_7_3/*.umap)",
       "Bash(do)",
       "Bash(echo:*)",
-      "Bash(done)"
+      "Bash(done)",
+      "Bash(for f in /home/daniel/uassets/test/assets/5_7_3/*.{uasset,umap})",
+      "Bash(do echo \"=== $f ===\")",
+      "Bash(xxd:*)",
+      "Bash(dd:*)",
+      "Bash(~/.bun/bin/bun:*)"
+    ],
+    "additionalDirectories": [
+      "/tmp"
     ]
   }
 }

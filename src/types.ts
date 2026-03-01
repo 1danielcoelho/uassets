@@ -42,6 +42,24 @@ export interface AssetSummary {
   customVersions: { name: string; version: number }[];
   /** Asset-specific key/value pairs shown in the summary card. */
   properties: { label: string; value: string }[];
+  /** Total number of entries in the package name table. */
+  nameCount: number;
+  /** Resolved export table entries. */
+  exports: Array<{
+    index: number;
+    objectName: string;
+    className: string;
+    serialOffset: number;
+    serialSize: number;
+    isAsset: boolean;
+  }>;
+  /** Resolved import table entries. */
+  imports: Array<{
+    index: number;
+    classPackage: string;
+    className: string;
+    objectName: string;
+  }>;
 }
 
 // ─── Display segment ─────────────────────────────────────────────────────────

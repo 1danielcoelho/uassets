@@ -83,6 +83,11 @@ export interface FObjectExport {
   createBeforeSerializationDependencies: number;
   serializationBeforeCreateDependencies: number;
   createBeforeCreateDependencies: number;
+  // UE5 >= 1006
+  isInherited: boolean;
+  // UE5 >= 1010 (relative to serialOffset)
+  scriptSerializationStartOffset: bigint;
+  scriptSerializationEndOffset: bigint;
 }
 
 // ── FObjectImport ─────────────────────────────────────────────────────────────

@@ -129,9 +129,10 @@ export function parseUAsset(buffer: ArrayBuffer): ParseResult {
   const nameOffset = r.readInt32("Name Offset");
 
   // SoftObjectPaths — UE5 >= ADD_SOFTOBJECTPATH_LIST (1008)
+  let softObjectPathsCount = 0, softObjectPathsOffset = 0;
   if (fileVersionUE5 >= UE5_ADD_SOFTOBJECTPATH_LIST) {
-    r.readInt32("Soft Object Paths Count");
-    r.readInt32("Soft Object Paths Offset");
+    softObjectPathsCount  = r.readInt32("Soft Object Paths Count");
+    softObjectPathsOffset = r.readInt32("Soft Object Paths Offset");
   }
 
   // LocalizationId — editor-only, present when fileVersionUE4 >= 516
@@ -140,9 +141,10 @@ export function parseUAsset(buffer: ArrayBuffer): ParseResult {
   }
 
   // Gatherable text data — UE4 >= 459
+  let gatherableTextDataCount = 0, gatherableTextDataOffset = 0;
   if (fileVersionUE4 >= UE4_SERIALIZE_TEXT_IN_PACKAGES) {
-    r.readInt32("Gatherable Text Data Count");
-    r.readInt32("Gatherable Text Data Offset");
+    gatherableTextDataCount  = r.readInt32("Gatherable Text Data Count");
+    gatherableTextDataOffset = r.readInt32("Gatherable Text Data Offset");
   }
 
   const exportCount  = r.readInt32("Export Count");
@@ -151,37 +153,42 @@ export function parseUAsset(buffer: ArrayBuffer): ParseResult {
   const importOffset = r.readInt32("Import Offset");
 
   // Verse cells (virtual machine export/import cells) — UE5 >= 1015
+  let cellExportCount = 0, cellExportOffset = 0, cellImportCount = 0, cellImportOffset = 0;
   if (fileVersionUE5 >= UE5_VERSE_CELLS) {
-    r.readInt32("Cell Export Count");
-    r.readInt32("Cell Export Offset");
-    r.readInt32("Cell Import Count");
-    r.readInt32("Cell Import Offset");
+    cellExportCount  = r.readInt32("Cell Export Count");
+    cellExportOffset = r.readInt32("Cell Export Offset");
+    cellImportCount  = r.readInt32("Cell Import Count");
+    cellImportOffset = r.readInt32("Cell Import Offset");
   }
 
   // Metadata serialization offset — UE5 >= 1014
+  let metadataOffset = 0;
   if (fileVersionUE5 >= UE5_METADATA_SERIALIZATION_OFFSET) {
-    r.readInt32("MetaData Offset");
+    metadataOffset = r.readInt32("MetaData Offset");
   }
 
-  r.readInt32("Depends Offset");
+  const dependsOffset = r.readInt32("Depends Offset");
 
   // Soft package references — UE4 >= 384
+  let softPackageRefsCount = 0, softPackageRefsOffset = 0;
   if (fileVersionUE4 >= UE4_ADD_STRING_ASSET_REFERENCES_MAP) {
-    r.readInt32("Soft Package References Count");
-    r.readInt32("Soft Package References Offset");
+    softPackageRefsCount  = r.readInt32("Soft Package References Count");
+    softPackageRefsOffset = r.readInt32("Soft Package References Offset");
   }
 
   // Searchable names offset — UE4 >= 510
+  let searchableNamesOffset = 0;
   if (fileVersionUE4 >= UE4_ADDED_SEARCHABLE_NAMES) {
-    r.readInt32("Searchable Names Offset");
+    searchableNamesOffset = r.readInt32("Searchable Names Offset");
   }
 
-  r.readInt32("Thumbnail Table Offset");
+  const thumbnailTableOffset = r.readInt32("Thumbnail Table Offset");
 
   // Import type hierarchies (new in UE5 1018)
+  let importTypeHierarchiesCount = 0, importTypeHierarchiesOffset = 0;
   if (fileVersionUE5 >= UE5_IMPORT_TYPE_HIERARCHIES) {
-    r.readInt32("Import Type Hierarchies Count");
-    r.readInt32("Import Type Hierarchies Offset");
+    importTypeHierarchiesCount  = r.readInt32("Import Type Hierarchies Count");
+    importTypeHierarchiesOffset = r.readInt32("Import Type Hierarchies Offset");
   }
 
   // Legacy Guid — only present when fileVersionUE5 < PACKAGE_SAVED_HASH (1016)
@@ -235,12 +242,13 @@ export function parseUAsset(buffer: ArrayBuffer): ParseResult {
     r.readInt32("Num Texture Allocations");
   }
 
-  r.readInt32("Asset Registry Data Offset");
+  const assetRegistryDataOffset = r.readInt32("Asset Registry Data Offset");
   r.readInt64("Bulk Data Start Offset");
 
   // World tile info offset — UE4 >= 224
+  let worldTileInfoOffset = 0;
   if (fileVersionUE4 >= UE4_WORLD_LEVEL_INFO) {
-    r.readInt32("World Tile Info Data Offset");
+    worldTileInfoOffset = r.readInt32("World Tile Info Data Offset");
   }
 
   // Chunk IDs — UE4 >= 326 uses TArray<int32>, UE4 >= 278 uses single int32
@@ -252,9 +260,10 @@ export function parseUAsset(buffer: ArrayBuffer): ParseResult {
   }
 
   // Preload dependency count + offset — UE4 >= 507
+  let preloadDepCount = 0, preloadDepOffset = 0;
   if (fileVersionUE4 >= UE4_PRELOAD_DEPENDENCIES_IN_COOKED_EXPORTS) {
-    r.readInt32("Preload Dependency Count");
-    r.readInt32("Preload Dependency Offset");
+    preloadDepCount  = r.readInt32("Preload Dependency Count");
+    preloadDepOffset = r.readInt32("Preload Dependency Offset");
   }
 
   // NamesReferencedFromExportDataCount — UE5 >= 1001
@@ -268,8 +277,9 @@ export function parseUAsset(buffer: ArrayBuffer): ParseResult {
   }
 
   // DataResourceOffset — UE5 >= 1009
+  let dataResourceOffset = 0;
   if (fileVersionUE5 >= UE5_DATA_RESOURCES) {
-    r.readInt32("Data Resource Offset");
+    dataResourceOffset = r.readInt32("Data Resource Offset");
   }
 
   // ── Phase 2: Index tables ─────────────────────────────────────────────────
@@ -382,7 +392,7 @@ export function parseUAsset(buffer: ArrayBuffer): ParseResult {
 
           // bIsInheritedInstance — UE5 >= 1006, serialized BEFORE PackageFlags
           const isInherited =
-            (fileVersionUE5 >= UE5_TRACK_OBJECT_EXPORT_IS_INHERITED) ? r.readInt32() !== 0 : false;
+            (fileVersionUE5 >= UE5_TRACK_OBJECT_EXPORT_IS_INHERITED) ? r.readInt32("Is Inherited Instance") !== 0 : false;
 
           // PackageFlags — always present (even when PackageGuid was removed)
           const exportPackageFlags = r.readUint32();
@@ -409,9 +419,11 @@ export function parseUAsset(buffer: ArrayBuffer): ParseResult {
           }
 
           // Script serialization offsets — UE5 >= 1010, serialized AFTER dependency counts
+          let scriptSerializationStartOffset = 0n;
+          let scriptSerializationEndOffset   = 0n;
           if (fileVersionUE5 >= UE5_SCRIPT_SERIALIZATION_OFFSET) {
-            r.readInt64(); // ScriptSerializationStartOffset
-            r.readInt64(); // ScriptSerializationEndOffset
+            scriptSerializationStartOffset = r.readInt64("Script Serialization Start Offset");
+            scriptSerializationEndOffset   = r.readInt64("Script Serialization End Offset");
           }
 
           const exp: FObjectExport = {
@@ -429,6 +441,9 @@ export function parseUAsset(buffer: ArrayBuffer): ParseResult {
             createBeforeSerializationDependencies: createBeforeSerDeps,
             serializationBeforeCreateDependencies: serBeforeCreateDeps,
             createBeforeCreateDependencies: createBeforeCreateDeps,
+            isInherited,
+            scriptSerializationStartOffset,
+            scriptSerializationEndOffset,
           };
           exports.push(exp);
           return exp;
@@ -436,6 +451,197 @@ export function parseUAsset(buffer: ArrayBuffer): ParseResult {
       }
       return exports;
     });
+  }
+
+  // ── Phase 2.5: Remaining index tables ────────────────────────────────────
+
+  // Depends Map — one TArray<FPackageIndex> per export.
+  // Each entry lists the package indices that must be loaded before this export.
+  if (dependsOffset > 0 && exportCount > 0) {
+    r.seek(dependsOffset);
+    r.group("Depends Map", () => {
+      for (let i = 0; i < exportCount; i++) {
+        r.group(`Depends[${i}]`, () =>
+          r.readArray(rr => rr.readInt32()));
+      }
+    });
+  }
+
+  // Soft Object Paths — UE5 >= 1008.
+  // Each FSoftObjectPath = FTopLevelAssetPath (2 × FName = 4 × int32) + FString subpath.
+  if (softObjectPathsOffset > 0 && softObjectPathsCount > 0) {
+    r.seek(softObjectPathsOffset);
+    r.group("Soft Object Paths", () => {
+      for (let i = 0; i < softObjectPathsCount; i++) {
+        r.group(`SoftObjectPath[${i}]`, () => {
+          r.readInt32("Package Name Index");
+          r.readInt32(); // package name number
+          r.readInt32("Asset Name Index");
+          r.readInt32(); // asset name number
+          r.readFString("Sub Path");
+        });
+      }
+    });
+  }
+
+  // Soft Package References — UE4 >= 384.
+  // Same FSoftObjectPath wire format as soft object paths above.
+  if (softPackageRefsOffset > 0 && softPackageRefsCount > 0) {
+    r.seek(softPackageRefsOffset);
+    r.group("Soft Package References", () => {
+      for (let i = 0; i < softPackageRefsCount; i++) {
+        r.group(`SoftRef[${i}]`, () => {
+          r.readInt32("Package Name Index");
+          r.readInt32(); // package name number
+          r.readInt32("Asset Name Index");
+          r.readInt32(); // asset name number
+          r.readFString("Sub Path");
+        });
+      }
+    });
+  }
+
+  // Searchable Names — UE4 >= 510.
+  // TMap<FPackageIndex, TArray<FName>> serialised as count-prefixed K/V pairs.
+  if (searchableNamesOffset > 0) {
+    r.seek(searchableNamesOffset);
+    r.group("Searchable Names", () => {
+      const entryCount = r.readInt32("Entry Count");
+      for (let i = 0; i < entryCount; i++) {
+        r.group(`Entry[${i}]`, () => {
+          r.readInt32("Package Index");
+          const nameCount = r.readInt32("Name Count");
+          for (let j = 0; j < nameCount; j++) {
+            r.readInt32(`Name[${j}] Index`);
+            r.readInt32(); // name number
+          }
+        });
+      }
+    });
+  }
+
+  // Preload Dependencies — UE4 >= 507.
+  // Flat TArray<FPackageIndex>; count comes from the summary header.
+  if (preloadDepOffset > 0 && preloadDepCount > 0) {
+    r.seek(preloadDepOffset);
+    r.group("Preload Dependencies", () => {
+      for (let i = 0; i < preloadDepCount; i++) {
+        r.readInt32(`Dep[${i}]`);
+      }
+    });
+  }
+
+  // Data Resources — UE5 >= 1009.
+  // FObjectDataResource::Serialize: versioned header then per-resource records.
+  if (dataResourceOffset > 0) {
+    r.seek(dataResourceOffset);
+    r.group("Data Resources", () => {
+      const drVersion = r.readUint32("Version");
+      const drCount   = r.readInt32("Count");
+      for (let i = 0; i < drCount; i++) {
+        r.group(`DataResource[${i}]`, () => {
+          r.readUint32("Flags");
+          // AddedCookedIndex = version 2, which is currently Latest
+          if (drVersion >= 2) r.readInt32("Cooked Index");
+          r.readInt64("Serial Offset");
+          r.readInt64("Duplicate Serial Offset");
+          r.readInt64("Serial Size");
+          r.readInt64("Raw Size");
+          r.readInt32("Outer Index");
+          r.readUint32("Legacy Bulk Data Flags");
+        });
+      }
+    });
+  }
+
+  // Verse Cell Exports — UE5 >= 1015.
+  // FCellExport: FName + FString + 3×int64 + 3×int32.
+  if (cellExportOffset > 0 && cellExportCount > 0) {
+    r.seek(cellExportOffset);
+    r.group("Cell Exports", () => {
+      for (let i = 0; i < cellExportCount; i++) {
+        r.group(`CellExport[${i}]`, () => {
+          r.readInt32("Cpp Class Info Index");
+          r.readInt32(); // cpp class info number
+          r.readFString("Verse Path");
+          r.readInt64("Serial Offset");
+          r.readInt64("Serial Layout Size");
+          r.readInt64("Serial Size");
+          r.readInt32("First Export Dependency");
+          r.readInt32("Serialization Before Serialization Deps");
+          r.readInt32("Create Before Serialization Deps");
+        });
+      }
+    });
+  }
+
+  // Verse Cell Imports — UE5 >= 1015.
+  // FCellImport: FPackageIndex + FString.
+  if (cellImportOffset > 0 && cellImportCount > 0) {
+    r.seek(cellImportOffset);
+    r.group("Cell Imports", () => {
+      for (let i = 0; i < cellImportCount; i++) {
+        r.group(`CellImport[${i}]`, () => {
+          r.readInt32("Package Index");
+          r.readFString("Verse Path");
+        });
+      }
+    });
+  }
+
+  // ── Phase 2.9: Opaque blob sections ──────────────────────────────────────
+  // For sections whose internal format is complex or editor-only, annotate the
+  // byte range as an opaque blob. Size = distance to the next known section start.
+  {
+    const allSectionOffsets = [
+      nameOffset, softObjectPathsOffset, gatherableTextDataOffset,
+      importOffset, exportOffset, cellExportOffset, cellImportOffset,
+      dependsOffset, softPackageRefsOffset, searchableNamesOffset,
+      thumbnailTableOffset, assetRegistryDataOffset, worldTileInfoOffset,
+      preloadDepOffset, dataResourceOffset, importTypeHierarchiesOffset,
+      metadataOffset, r.byteLength, // file end as sentinel
+    ].filter(o => o > 0).sort((a, b) => a - b);
+
+    const blobSize = (offset: number): number => {
+      const next = allSectionOffsets.find(o => o > offset);
+      return next !== undefined ? next - offset : 0;
+    };
+
+    // Gatherable Text Data — UE4 >= 459 (editor-only text localization data)
+    if (gatherableTextDataOffset > 0 && gatherableTextDataCount > 0) {
+      const size = blobSize(gatherableTextDataOffset);
+      if (size > 0) { r.seek(gatherableTextDataOffset); r.readBytes(size, "Gatherable Text Data"); }
+    }
+
+    // Import Type Hierarchies — UE5 >= 1018 (no source available for format)
+    if (importTypeHierarchiesOffset > 0 && importTypeHierarchiesCount > 0) {
+      const size = blobSize(importTypeHierarchiesOffset);
+      if (size > 0) { r.seek(importTypeHierarchiesOffset); r.readBytes(size, "Import Type Hierarchies"); }
+    }
+
+    // Thumbnail Table — editor-only asset preview thumbnails
+    if (thumbnailTableOffset > 0) {
+      const size = blobSize(thumbnailTableOffset);
+      if (size > 0) { r.seek(thumbnailTableOffset); r.readBytes(size, "Thumbnail Table"); }
+    }
+
+    // Asset Registry Data — content browser metadata
+    if (assetRegistryDataOffset > 0) {
+      const size = blobSize(assetRegistryDataOffset);
+      if (size > 0) { r.seek(assetRegistryDataOffset); r.readBytes(size, "Asset Registry Data"); }
+    }
+
+    // World Tile Info — UE4 >= 224 (level streaming metadata)
+    if (worldTileInfoOffset > 0) {
+      const size = blobSize(worldTileInfoOffset);
+      if (size > 0) { r.seek(worldTileInfoOffset); r.readBytes(size, "World Tile Info Data"); }
+    }
+
+    // Metadata — UE5 >= 1014 (editor asset metadata)
+    if (metadataOffset > 0) {
+      const size = blobSize(metadataOffset);
+      if (size > 0) { r.seek(metadataOffset); r.readBytes(size, "Metadata"); }
+    }
   }
 
   // ── Phase 3: Export data ──────────────────────────────────────────────────
@@ -452,7 +658,11 @@ export function parseUAsset(buffer: ArrayBuffer): ParseResult {
     if (offset <= 0 || size <= 0) continue;
 
     r.seek(offset);
-    dispatchExport(r, cls, offset, size, names, fileVersionUE4);
+    dispatchExport(
+      r, cls, offset, size, names, fileVersionUE4, fileVersionUE5,
+      Number(exp.scriptSerializationStartOffset),
+      Number(exp.scriptSerializationEndOffset),
+    );
   }
 
   // ── Build result ──────────────────────────────────────────────────────────
@@ -463,6 +673,21 @@ export function parseUAsset(buffer: ArrayBuffer): ParseResult {
     engineVersion: fEngineVersionToString(savedEngineVersion),
     customVersions,
     properties: [],
+    nameCount: names.length,
+    exports: exports.map((exp, i) => ({
+      index: i,
+      objectName: resolveName(names, exp.objectName),
+      className:  resolveClass(imports, exports, names, exp.classIndex),
+      serialOffset: Number(exp.serialOffset),
+      serialSize:   Number(exp.serialSize),
+      isAsset: exp.isAsset,
+    })),
+    imports: imports.map((imp, i) => ({
+      index: -(i + 1),
+      classPackage: resolveName(names, imp.classPackage),
+      className:    resolveName(names, imp.className),
+      objectName:   resolveName(names, imp.objectName),
+    })),
   };
 
   return {

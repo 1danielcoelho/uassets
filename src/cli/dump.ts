@@ -65,6 +65,37 @@ if (summary.properties.length > 0) {
     console.log(`  ${p.label.padEnd(12)}: ${p.value}`);
   }
 }
+console.log(`  Names       : ${summary.nameCount} entries`);
+
+// Exports listing
+console.log(`  Exports     : ${summary.exports.length} objects`);
+{
+  const exps = summary.exports;
+  const shown = exps.length <= 8 ? exps : [...exps.slice(0, 4), null, ...exps.slice(-2)];
+  for (const e of shown) {
+    if (e === null) { console.log("    ..."); continue; }
+    const tag   = e.isAsset ? "  [asset]" : "";
+    const name  = e.objectName.padEnd(24);
+    const cls   = e.className.padEnd(24);
+    const size  = formatBytes(e.serialSize).padStart(8);
+    const off   = `0x${e.serialOffset.toString(16)}`;
+    console.log(`    [${e.index}]  ${name} ${cls} ${size} @ ${off}${tag}`);
+  }
+}
+
+// Imports listing
+console.log(`  Imports     : ${summary.imports.length} references`);
+{
+  const imps = summary.imports;
+  const shown = imps.length <= 8 ? imps : [...imps.slice(0, 4), null, ...imps.slice(-2)];
+  for (const im of shown) {
+    if (im === null) { console.log("    ..."); continue; }
+    const pkg  = im.classPackage.padEnd(28);
+    const cls  = im.className.padEnd(20);
+    console.log(`    [${im.index}]  ${pkg} ${cls} ${im.objectName}`);
+  }
+}
+
 console.log("═".repeat(72));
 console.log();
 
