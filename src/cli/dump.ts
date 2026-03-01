@@ -74,10 +74,22 @@ const pct = ((annotatedBytes / totalBytes) * 100).toFixed(1);
 console.log(`  Annotated: ${formatBytes(annotatedBytes)} of ${formatBytes(totalBytes)} (${pct}%)`);
 console.log();
 
+// ── Formatting helpers ────────────────────────────────────────────────────────
+
+// ANSI color codes available for label hashing
+const ANSI_COLORS = [
+  "\x1b[32m", // green
+  "\x1b[34m", // blue
+  "\x1b[35m", // magenta
+  "\x1b[33m", // yellow
+  "\x1b[36m", // cyan
+  "\x1b[31m", // red
+  "\x1b[37m", // white
+  "\x1b[90m", // dark gray
+];
+
 // Range tree
 printRangeTree(ranges, 0);
-
-// ── Formatting helpers ────────────────────────────────────────────────────────
 
 function printRangeTree(ranges: ByteRange[], depth: number): void {
   const indent = "  ".repeat(depth);
@@ -107,18 +119,6 @@ function stringifyValue(range: ByteRange): string {
     case "group":   return "";
   }
 }
-
-// ANSI color codes available for label hashing
-const ANSI_COLORS = [
-  "\x1b[32m", // green
-  "\x1b[34m", // blue
-  "\x1b[35m", // magenta
-  "\x1b[33m", // yellow
-  "\x1b[36m", // cyan
-  "\x1b[31m", // red
-  "\x1b[37m", // white
-  "\x1b[90m", // dark gray
-];
 
 function colorChar(label: string): string {
   // djb2 hash of the label, pick a color from the palette

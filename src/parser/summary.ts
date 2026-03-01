@@ -374,26 +374,27 @@ export function parseUAsset(buffer: ArrayBuffer): ParseResult {
           const notForClient = r.readInt32() !== 0;
           const notForServer = r.readInt32() !== 0;
 
-          // PackageGuid (16 bytes) + PackageFlags (uint32) removed in UE5 >= 1005
+          // PackageGuid removed in UE5 >= 1005, but PackageFlags is ALWAYS present
           let packageGuid = undefined as any;
-          let exportPackageFlags = 0;
           if (fileVersionUE5 < UE5_REMOVE_OBJECT_EXPORT_PACKAGE_GUID) {
             packageGuid = r.readFGuid();
-            exportPackageFlags = r.readUint32();
           }
+
+          // bIsInheritedInstance — UE5 >= 1006, serialized BEFORE PackageFlags
+          const isInherited =
+            (fileVersionUE5 >= UE5_TRACK_OBJECT_EXPORT_IS_INHERITED) ? r.readInt32() !== 0 : false;
+
+          // PackageFlags — always present (even when PackageGuid was removed)
+          const exportPackageFlags = r.readUint32();
 
           const notAlwaysLoadedForEditorGame =
             (fileVersionUE4 >= UE4_LOAD_FOR_EDITOR_GAME) ? r.readInt32() !== 0 : false;
           const isAsset =
             (fileVersionUE4 >= UE4_COOKED_ASSETS_IN_EDITOR_SUPPORT) ? r.readInt32() !== 0 : false;
-          const isInherited =
-            (fileVersionUE5 >= UE5_TRACK_OBJECT_EXPORT_IS_INHERITED) ? r.readInt32() !== 0 : false;
 
-          // Script serialization offsets — UE5 >= 1010
-          if (fileVersionUE5 >= UE5_SCRIPT_SERIALIZATION_OFFSET) {
-            r.readInt64(); // ScriptSerializationStartOffset
-            r.readInt64(); // ScriptSerializationEndOffset
-          }
+          // bGeneratePublicHash — UE5 >= 1003 (OPTIONAL_RESOURCES)
+          const generatePublicHash =
+            (fileVersionUE5 >= UE5_OPTIONAL_RESOURCES) ? r.readInt32() !== 0 : false;
 
           // Preload dependency indices — UE4 >= 507
           let firstExportDep = -1;
@@ -407,6 +408,12 @@ export function parseUAsset(buffer: ArrayBuffer): ParseResult {
             createBeforeCreateDeps = r.readInt32();
           }
 
+          // Script serialization offsets — UE5 >= 1010, serialized AFTER dependency counts
+          if (fileVersionUE5 >= UE5_SCRIPT_SERIALIZATION_OFFSET) {
+            r.readInt64(); // ScriptSerializationStartOffset
+            r.readInt64(); // ScriptSerializationEndOffset
+          }
+
           const exp: FObjectExport = {
             classIndex, superIndex, templateIndex, outerIndex,
             objectName: objectNameIdx,
@@ -416,7 +423,7 @@ export function parseUAsset(buffer: ArrayBuffer): ParseResult {
             packageFlags: exportPackageFlags,
             notAlwaysLoadedForEditorGame,
             isAsset,
-            generatePublicHash: isInherited,
+            generatePublicHash,
             firstExportDependency: firstExportDep,
             serializationBeforeSerializationDependencies: serBeforeSerDeps,
             createBeforeSerializationDependencies: createBeforeSerDeps,
@@ -433,8 +440,9 @@ export function parseUAsset(buffer: ArrayBuffer): ParseResult {
 
   // ── Phase 3: Export data ──────────────────────────────────────────────────
 
-  const assetClass = exports.length > 0
-    ? resolveClass(imports, exports, names, exports[0]!.classIndex)
+  const primaryExport = exports.find(e => e.isAsset) ?? exports[0];
+  const assetClass = primaryExport
+    ? resolveClass(imports, exports, names, primaryExport.classIndex)
     : "";
 
   for (const exp of exports) {

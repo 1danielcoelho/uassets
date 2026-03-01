@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python3:*)",
+      "Bash(bun run:*)",
+      "Bash(for f in test/assets/5_7_3/*.uasset test/assets/5_7_3/*.umap)",
+      "Bash(do)",
+      "Bash(echo:*)",
+      "Bash(done)"
+    ]
+  }
+}
