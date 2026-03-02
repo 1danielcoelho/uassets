@@ -141,22 +141,11 @@ structured sections that follow it. All 6 test assets pass (6/6).
 - PackageTrailer (FHeader + FLookupTableEntry × N + payload blobs + FFooter)
 - Export object data (property tags loop + object-specific data region)
 
-**dispatch.ts note:**
-- Property tag parsing is implemented in `tagged-properties.ts` and called from `dispatch.ts`
-
 ## Next steps
 
-1. **Fix property tag parsing** — debug any remaining out-of-bounds reads in
-   `tagged-properties.ts`, and ensure all property tags are parsed for all test assets
-2. **Annotate all export object bytes** — after property tags, annotate any remaining bytes
-   in each export as asset-class-specific data (e.g., "Static Mesh Data"), so that 100%
-   of bytes are annotated for all test assets. Note that we only care about UObject general
-   data at this point. We don't need to step into e.g. UStaticMesh specific data, or Blueprint
-   graph data and so on
-3. **Improve dump.ts output** — make sure all the entries in the raw output display some
-   useful value (for example the imports table just displays `Import[0]` right now, which
-   is not useful. There may be other fields that are incomplete in this way)
-4. **Implement HTML user interface** (future milestone)
+1. **Implement HTML user interface** — this is the next major milestone. See the layout
+   description above for the planned hex view + summary + legend layout.
+   Key files to create: `src/ui/app.ts`, `src/ui/hex-view.ts`, `src/ui/legend.ts`
 
 # Bun
 

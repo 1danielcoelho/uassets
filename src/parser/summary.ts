@@ -109,13 +109,14 @@ export function parseUAsset(buffer: ArrayBuffer): ParseResult {
       const count = r.readInt32();
       const result: { name: string; version: number }[] = [];
       for (let i = 0; i < count; i++) {
-        const cv = r.group(`Custom Version [${i}]`, () => {
-          const guid = r.readFGuid("GUID");
-          const ver  = r.readInt32("Version");
-          const guidStr = fGuidToString(guid);
-          return { guid, version: ver, label: `${guidStr} v${ver}` };
+        let cvGuid!: ReturnType<typeof r.readFGuid>;
+        let cvVer!: number;
+        r.group(`Custom Version [${i}]`, () => {
+          cvGuid = r.readFGuid("GUID");
+          cvVer  = r.readInt32("Version");
+          return `${fGuidToString(cvGuid)} v${cvVer}`;
         });
-        result.push({ name: fGuidToString(cv.guid), version: cv.version });
+        result.push({ name: fGuidToString(cvGuid), version: cvVer });
       }
       return result;
     });
@@ -361,7 +362,7 @@ export function parseUAsset(buffer: ArrayBuffer): ParseResult {
             objectName:   objectNameIdx,
           };
           imports.push(imp);
-          return imp;
+          return `${resolveName(names, classNameIdx)} ${resolveName(names, objectNameIdx)}`;
         });
       }
       return imports;
@@ -465,7 +466,7 @@ export function parseUAsset(buffer: ArrayBuffer): ParseResult {
             scriptSerializationEndOffset,
           };
           exports.push(exp);
-          return exp;
+          return resolveName(names, objectNameIdx);
         });
       }
       return exports;
