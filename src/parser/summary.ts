@@ -496,11 +496,14 @@ export function parseUAsset(buffer: ArrayBuffer): ParseResult {
 
   // Soft Object Paths — UE5 >= 1008.
   // Each FSoftObjectPath = FTopLevelAssetPath (2 × FName = 4 × int32) + FString subpath.
+  // When FSoftObjectPath appears in the package body (metadata, property values, etc.)
+  // it is serialized as a single int32 index into this table (see FLinkerLoad).
+  const softObjectPaths: string[] = [];
   if (softObjectPathsOffset > 0 && softObjectPathsCount > 0) {
     r.seek(softObjectPathsOffset);
     r.group("Soft Object Paths", () => {
       for (let i = 0; i < softObjectPathsCount; i++) {
-        r.group(`SoftObjectPath[${i}]`, () => {
+        const path = r.group(`SoftObjectPath[${i}]`, () => {
           const pkgIdx   = r.readInt32("Package Name Index");
                            r.readInt32(); // package name number
           const assetIdx = r.readInt32("Asset Name Index");
@@ -510,6 +513,7 @@ export function parseUAsset(buffer: ArrayBuffer): ParseResult {
           const asset = resolveName(names, assetIdx);
           return subPath ? `${pkg}.${asset}:${subPath}` : `${pkg}.${asset}`;
         });
+        softObjectPaths.push(path);
       }
     });
   }
@@ -807,8 +811,11 @@ export function parseUAsset(buffer: ArrayBuffer): ParseResult {
     // Format:
     //   int32 NumObjectMetaDataMap
     //   int32 NumRootMetaDataMap
-    //   per ObjectMeta: FSoftObjectPath (FTopLevelAssetPath = 4 int32, FString) + TMap<FName,FString>
-    //   per RootMeta: FName (2 int32) + FString
+    //   per ObjectMeta: int32 softObjectPathIndex + TMap<FName, FString>
+    //   per RootMeta:   FName (2 int32) + FString
+    //
+    // FSoftObjectPath in the package body is stored as a single int32 index into the
+    // Soft Object Paths table in the header (see FLinkerLoad::operator<< FSoftObjectPath).
     if (metadataOffset > 0) {
       r.seek(metadataOffset);
       r.group("Metadata", () => {
@@ -816,12 +823,9 @@ export function parseUAsset(buffer: ArrayBuffer): ParseResult {
         const numRootMeta   = r.readInt32("Num Root Metadata Entries");
         for (let i = 0; i < numObjectMeta; i++) {
           r.group(`ObjectMeta[${i}]`, () => {
-            // FSoftObjectPath: FTopLevelAssetPath (2 × FName = 4 × int32) + FString subpath
-            const pkgNameIdx = r.readInt32("Package Name Index");
-            r.readInt32(); // package name number
-            const assetIdx   = r.readInt32("Asset Name Index");
-            r.readInt32(); // asset name number
-            const subPath    = r.readFString("Sub Path");
+            // FSoftObjectPath serialized as int32 index into softObjectPaths table.
+            const pathIdx = r.readInt32("Soft Object Path Index");
+            const path    = softObjectPaths[pathIdx] ?? `<softpath#${pathIdx}>`;
             // TMap<FName, FString>: int32 count + per-entry: FName (2 int32) + FString
             const mapCount = r.readInt32("Tag Count");
             for (let j = 0; j < mapCount; j++) {
@@ -832,9 +836,7 @@ export function parseUAsset(buffer: ArrayBuffer): ParseResult {
                 return `${resolveName(names, keyIdx)} = ${value}`;
               });
             }
-            const pkg   = resolveName(names, pkgNameIdx);
-            const asset = resolveName(names, assetIdx);
-            return subPath ? `${pkg}.${asset}:${subPath}` : `${pkg}.${asset}`;
+            return path;
           });
         }
         for (let i = 0; i < numRootMeta; i++) {

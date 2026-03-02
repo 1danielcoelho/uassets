@@ -13,7 +13,11 @@
       "Bash(dd:*)",
       "Bash(~/.bun/bin/bun:*)",
       "Bash(wc:*)",
-      "Read(//home/daniel/.bun/bin/**)"
+      "Read(//home/daniel/.bun/bin/**)",
+      "Bash(bun test:*)",
+      "Bash(awk:*)",
+      "Bash(sed:*)",
+      "Bash(grep:*)"
     ],
     "additionalDirectories": [
       "/tmp"

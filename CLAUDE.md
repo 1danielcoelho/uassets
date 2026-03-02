@@ -1,6 +1,7 @@
 # General tips and guidelines
 
-* The assets and code in this project largely follow Unreal Engine 5.7.3 (available at `./UnrealEngine-5.7.3-release`), which can be different from what was in your training data. Be careful with your assumptions! If at any time you are in doubt, *CHECK THE SOURCE CODE* and don't just assume that you did!
+* The assets and code in this project largely follow Unreal Engine 5.7.3 (available at `./UnrealEngine-5.7.3-release`), which can be different from what was in your training data. Be careful with your assumptions! If at any time you are in doubt, **CHECK THE SOURCE CODE** and don't just assume that you did!
+* The above rule is very important: Every time you are stuck for more than a few paragraphs on an issue, stop what you're doing and read all of the the relevant code until you understand what is happening, without guessing.
 * This file is your main memory for this project, and includes a section below for `Current Plan`. Whenever you progress on the plan, make sure do update this file as well with at least a summary of the actual current plan, both with your findings and the next steps.
 
 # UAsset Viewer
@@ -123,7 +124,7 @@ Menu bar items:
 ## State of parser (summary.ts)
 
 The parser in `src/parser/summary.ts` fully parses the FPackageFileSummary header and all
-structured sections that follow it. Coverage is 100% for 5 of 6 test assets.
+structured sections that follow it. All 6 test assets pass (6/6).
 
 **Sections parsed and annotated:**
 - Magic number, file versions (UE4/UE5), package flags, package name/group
@@ -135,37 +136,24 @@ structured sections that follow it. Coverage is 100% for 5 of 6 test assets.
 - Asset Registry Data (DependencyDataOffset + object+tag records + dependency blob)
 - World Tile Info (opaque blob)
 - Preload Dependency Data, Data Resource Map, Import Type Hierarchies
-- Metadata (NumObjectMeta + NumRootMeta entries with FSoftObjectPath + TMap<FName,FString>)
+- Metadata (NumObjectMeta + NumRootMeta entries with int32 soft path index + TMap<FName,FString>)
 - Exports Footer Tag (0x9E2A83C1 at bulkDataStartOffset)
 - PackageTrailer (FHeader + FLookupTableEntry × N + payload blobs + FFooter)
 - Export object data (property tags loop + object-specific data region)
 
-**Known issue — Blueprint.uasset metadata parsing fails:**
-- Error: `Out of bounds: tried to read 1157641728 bytes at offset 0x2B45`
-- Root cause: `SoftObjectPathLoadSubPathWorkaround` in UE source — for assets with
-  `FFortniteMainBranchObjectVersion < SoftObjectPathUtf8SubPaths`, the `SubPath` component
-  of `FSoftObjectPath` is serialized as FWideString (UTF-16LE) rather than a normal FString.
-  The 4-byte length prefix `00 36 00 45` is read as a little-endian int32 = 1157641728 (garbage).
-- Fix: check the `FFortniteMainBranchObjectVersion::SoftObjectPathUtf8SubPaths` custom version
-  entry value in the file. If it is below the threshold (check UE source for the version number),
-  use a wide-string reader for sub-paths instead of `readFString`.
-
 **dispatch.ts note:**
-- Property tag parsing is partially implemented in `tagged-properties.ts` and called from
-  `dispatch.ts`. The call is currently gated with `&& false` (line ~58) to disable it while
-  it is being debugged. This needs to be fixed and re-enabled.
+- Property tag parsing is implemented in `tagged-properties.ts` and called from `dispatch.ts`
 
 ## Next steps
 
-1. **Fix Blueprint metadata** — implement `SoftObjectPathLoadSubPathWorkaround` detection
-   (check Fortnite custom version) and read wide-string sub-paths when needed
-2. **Fix property tag parsing** — re-enable the disabled code in `dispatch.ts`, debug the
-   remaining out-of-bounds reads in `tagged-properties.ts`, and ensure all property tags
-   are parsed for all test assets
-3. **Annotate all export object bytes** — after property tags, annotate any remaining bytes
+1. **Fix property tag parsing** — debug any remaining out-of-bounds reads in
+   `tagged-properties.ts`, and ensure all property tags are parsed for all test assets
+2. **Annotate all export object bytes** — after property tags, annotate any remaining bytes
    in each export as asset-class-specific data (e.g., "Static Mesh Data"), so that 100%
-   of bytes are annotated for all test assets
-4. **Improve dump.ts output** — make sure all the entries in the raw output display some
+   of bytes are annotated for all test assets. Note that we only care about UObject general
+   data at this point. We don't need to step into e.g. UStaticMesh specific data, or Blueprint
+   graph data and so on
+3. **Improve dump.ts output** — make sure all the entries in the raw output display some
    useful value (for example the imports table just displays `Import[0]` right now, which
    is not useful. There may be other fields that are incomplete in this way)
 4. **Implement HTML user interface** (future milestone)
