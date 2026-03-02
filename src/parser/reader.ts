@@ -5,7 +5,7 @@ import type {
   FCustomVersion,
   FGenerationInfo,
   FCompressedChunk,
-} from "./primitives.ts";
+} from "./types.ts";
 
 /**
  * Cursor-based binary reader over an ArrayBuffer.

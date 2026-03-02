@@ -32,11 +32,13 @@ uassets/
 │   │   └── dump.ts            # CLI tool: dumps parsed annotations to stdout
 │   ├── parser/
 │   │   ├── reader.ts          # BinaryReader — cursor-based, annotating reads
-│   │   ├── primitives.ts      # FString, FName, FGuid, FEngineVersion, custom versions, etc.
-│   │   ├── summary.ts         # FPackageFileSummary (the big header) + all structured sections
-│   │   ├── dispatch.ts        # Detect asset class, route to the right parser
-│   │   └── tagged-properties.ts  # FProperty / FPropertyTag parsing (WIP)
-│   └── types.ts               # Shared types (ByteRange, ParseResult, etc.)
+│   │   ├── types.ts           # UE primitive interfaces (FGuid, FEngineVersion, FObjectExport, etc.)
+│   │   ├── utils.ts           # Shared helpers (resolveName, resolveClass, fGuidToString, etc.)
+│   │   ├── summary.ts         # parsePackageFileSummary — fixed header only
+│   │   ├── parser.ts          # parseUAsset — main orchestrator + all segment parsing functions
+│   │   ├── dispatch.ts        # Class-specific parser registry and dispatch
+│   │   └── tagged-properties.ts  # FProperty / FPropertyTag parsing
+│   └── types.ts               # Shared types (ByteRange, ParseResult, AssetSummary, etc.)
 ├── test/
 │   ├── assets/5_7_3/          # Sample UE 5.7.3 .uasset/.umap files for regression tests
 │   │   ├── Blueprint.uasset
@@ -121,10 +123,19 @@ Menu bar items:
 
 # Current plan
 
-## State of parser (summary.ts)
+## State of parser
 
-The parser in `src/parser/summary.ts` fully parses the FPackageFileSummary header and all
-structured sections that follow it. All 6 test assets pass (6/6).
+The parser is fully refactored and all 6 test assets pass (6/6).
+
+**Parser file layout (post-cleanup):**
+- `src/parser/types.ts` — UE primitive interfaces (FGuid, FEngineVersion, FObjectExport, FObjectImport, etc.)
+- `src/parser/utils.ts` — resolveName, resolveClass, fGuidToString, fEngineVersionToString
+- `src/parser/summary.ts` — parsePackageFileSummary (fixed header only) + UE version constants
+- `src/parser/parser.ts` — parseUAsset orchestrator + segment functions (parseNamesTable,
+  parseImportsTable, parseExportsTable, parseIndexTables, parseOpaqueBlobs, parseMetadata,
+  parseGenericExport)
+- `src/parser/dispatch.ts` — class-specific parser registry; dispatchExport returns bool
+- `src/parser/tagged-properties.ts` — FPropertyTag parsing (UE5 new + old format)
 
 **Sections parsed and annotated:**
 - Magic number, file versions (UE4/UE5), package flags, package name/group
@@ -143,25 +154,6 @@ structured sections that follow it. All 6 test assets pass (6/6).
 
 ## Next steps
 
-- **General cleanup**
-   - `parseUAsset` has outgrown summary.ts: Make a dedicated file for the parser where that function
-     can live. You can then make a separate function for parsing the package summary, and call it from
-     `parseUAsset`. Pull out into that function only what is part of the summary itself though
-   - On parser, make functions for the other segments of the UObject, like exports and imports table,
-     metadata, etc. Then invoke them from the main `parseUAsset` function
-   - Move those `resolveName` and `resolveClass` to a separate `utils` file
-   - Move the `fGuidToString` and `fEngineVersionToString` functions to the utils file too (or make them members
-     of the FGuid / FEngineVersion interfaces somehow? I'm not sure what the best practice for Typescript is here)
-   - If the `primitives.ts` is left with only interface declarations after the previous step, rename it to `types.ts`
-   - Should there be one for soft object paths inside the linker load as well? Note how we track `softObjectPaths`
-     for the metadata parsing section for example
-   - I don't like how `dispatchExport` does part of the generic UObject parsing for the export, like handling the
-     tagged properties. The "dispatch" should only be about having code specific to each UAsset type (whenever we get
-     to implementing that), like UStaticMesh-specific bytes, UMaterial bytes, etc. All generic UAsset parsing
-     should be on parser.ts, and moved to a dedicated function that `parseUAsset` calls, if it gets too big
-   - On the dump.ts output, you indent lines for annotations inside groups by adding the indent way on the start
-     of the line. This makes it a bit difficult to read. Make sure the colored square, the address, and the size
-     are always aligned, but only indent the annotation name itself (the value should not be indented either)
 - **Implement HTML user interface** — this is the next major milestone. See the layout
    description above for the planned hex view + summary + legend layout.
    Key files to create: `src/ui/app.ts`, `src/ui/hex-view.ts`, `src/ui/legend.ts`

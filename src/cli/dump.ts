@@ -10,8 +10,8 @@
 
 import { readFileSync } from "fs";
 import type { ByteRange, ParseResult } from "../types.ts";
-import { fGuidToString } from "../parser/primitives.ts";
-import { parseUAsset } from "../parser/summary.ts";
+import { fGuidToString } from "../parser/utils.ts";
+import { parseUAsset } from "../parser/parser.ts";
 
 // ── Entry point ───────────────────────────────────────────────────────────────
 
@@ -131,10 +131,10 @@ function printRangeTree(ranges: ByteRange[], depth: number): void {
     const offsetStr = `0x${range.start.toString(16).padStart(8, "0")}`;
     const sizeStr   = `+${formatBytes(range.end - range.start)}`.padStart(9);
     const colorDot  = colorChar(range.label);
-    const label     = range.label.padEnd(30 - depth * 2);
+    const label     = (indent + range.label).padEnd(32);
     const vs        = stringifyValue(range);
     const value     = vs ? `  →  ${truncate(vs, 50)}` : "";
-    console.log(`${indent}${colorDot} ${offsetStr} ${sizeStr}  ${label}${value}`);
+    console.log(`${colorDot} ${offsetStr} ${sizeStr}  ${label}${value}`);
     if (range.kind === "group" && range.children.length > 0) {
       printRangeTree(range.children, depth + 1);
     }

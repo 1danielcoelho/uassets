@@ -1,6 +1,6 @@
 // ─── Byte range annotation ──────────────────────────────────────────────────
 
-import type { FGuid } from "./parser/primitives.ts";
+import type { FGuid } from "./parser/types.ts";
 
 interface ByteRangeBase {
   /** Byte offset in the file, inclusive. */
