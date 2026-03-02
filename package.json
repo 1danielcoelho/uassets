@@ -3,9 +3,9 @@
   "type": "module",
   "private": true,
   "scripts": {
-    "dev": "bun --watch src/ui/app.ts",
-    "build": "bun build src/ui/app.ts --outdir dist --minify",
-    "test": "bun test",
+    "dev": "bun dev.ts",
+    "build": "bun build index.html --outdir dist --minify",
+    "test": "bun test .test",
     "dump": "bun run src/cli/dump.ts"
   },
   "devDependencies": {

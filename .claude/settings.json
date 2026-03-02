@@ -17,7 +17,8 @@
       "Bash(bun test:*)",
       "Bash(awk:*)",
       "Bash(sed:*)",
-      "Bash(grep:*)"
+      "Bash(grep:*)",
+      "Bash(timeout 8 bun dev.ts:*)"
     ],
     "additionalDirectories": [
       "/tmp"

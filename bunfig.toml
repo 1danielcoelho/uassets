@@ -1,4 +1,4 @@
 [build]
-entrypoints = ["src/ui/app.ts"]
+entrypoints = ["index.html"]
 outdir = "dist"
 minify = true
