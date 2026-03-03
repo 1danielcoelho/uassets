@@ -73,15 +73,16 @@ Bun.serve({
       });
     }
 
-    // Map "/" to index.html
-    const filePath = url.pathname === "/"
-      ? "./dist/index.html"
-      : `./dist${url.pathname}`;
+    // Map "/" to index.html; fall back to project root for /test/ assets etc.
+    const distPath = url.pathname === "/" ? "./dist/index.html" : `./dist${url.pathname}`;
+    const rootPath = `.${url.pathname}`;
 
-    const file = Bun.file(filePath);
+    let file = Bun.file(distPath);
+    if (!(await file.exists())) file = Bun.file(rootPath);
     if (!(await file.exists())) {
       return new Response("Not found", { status: 404 });
     }
+    const filePath = distPath;
 
     // Inject reload snippet into HTML responses
     if (filePath.endsWith(".html")) {

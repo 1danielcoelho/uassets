@@ -2,11 +2,14 @@ import type { ParseResult } from "../types.ts";
 import { DEFAULT_OPTIONS } from "../types.ts";
 import { parseUAsset } from "../parser/parser.ts";
 import { initHexView } from "./hex-view.ts";
+import { initLegend } from "./legend.ts";
 
 // ── Elements ──────────────────────────────────────────────────────────────────
 
 const hexPanel     = document.getElementById("hex-panel")!;
+const hexColHeader = document.getElementById("hex-col-header")!;
 const summaryPanel = document.getElementById("summary-panel")!;
+const legendPanel  = document.getElementById("legend-panel")!;
 const menuFile     = document.getElementById("menu-file")!;
 const dropdownFile = document.getElementById("dropdown-file")!;
 const menuFileOpen = document.getElementById("menu-file-open")!;
@@ -73,7 +76,8 @@ async function openFile(file: File): Promise<void> {
 
   titleEl.textContent = file.name;
   renderSummary(result, file);
-  initHexView(hexPanel, buffer, result, DEFAULT_OPTIONS);
+  initHexView(hexPanel, hexColHeader, buffer, result, DEFAULT_OPTIONS);
+  initLegend(legendPanel, result.ranges);
 }
 
 // ── Summary panel ─────────────────────────────────────────────────────────────
@@ -114,3 +118,10 @@ function formatBytes(n: number): string {
 function escHtml(s: string): string {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
+
+// ── Dev: auto-load test asset ─────────────────────────────────────────────────
+
+fetch("/test/assets/5_7_3/SM_cube.uasset")
+  .then(r => r.ok ? r.arrayBuffer() : Promise.reject())
+  .then(buf => openFile(new File([buf], "SM_cube.uasset")))
+  .catch(() => { /* not in dev, or file missing — silently skip */ });

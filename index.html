@@ -92,6 +92,30 @@
         color: #d4d4d4;
       }
 
+      /* ── Hex column (wraps header + panel) ── */
+      #hex-column {
+        display: flex;
+        flex-direction: column;
+        flex: 1;
+        overflow: hidden;
+      }
+
+      #hex-col-header {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        height: 28px;
+        flex-shrink: 0;
+        background: #1a1a1a;
+        border-bottom: 1px solid #272727;
+        padding: 0 12px;
+        font-size: 10px;
+        color: #666;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        user-select: none;
+      }
+
       /* ── Hex rows ── */
       .hex-row {
         height: 20px;         /* must match ROW_HEIGHT in hex-view.ts */
@@ -103,9 +127,9 @@
       }
 
       .addr {
-        color: #4a4a4a;
+        color: #c8c8c8;
         flex-shrink: 0;
-        width: 64px;
+        width: 82px;
         letter-spacing: 0.03em;
       }
 
@@ -131,7 +155,7 @@
       .ascii {
         display: flex;
         flex-shrink: 0;
-        color: #555;
+        color: #c8c8c8;
       }
 
       /* Individual ASCII cell */
@@ -194,6 +218,74 @@
         color: #555;
         font-size: 12px;
       }
+
+      /* ── Legend table ── */
+      .legend-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 11px;
+      }
+
+      .legend-row {
+        border-bottom: 1px solid #1f1f1f;
+        height: 22px;
+      }
+
+      .legend-row:hover { background: #252525; }
+
+      td.legend-swatch {
+        width: 18px;
+        padding: 0 2px 0 6px;
+        vertical-align: middle;
+      }
+
+      .swatch-dot {
+        width: 10px;
+        height: 10px;
+        border-radius: 2px;
+      }
+
+      td.legend-size {
+        width: 54px;
+        color: #555;
+        text-align: right;
+        padding-right: 8px;
+        white-space: nowrap;
+        vertical-align: middle;
+        font-size: 10px;
+      }
+
+      td.legend-name {
+        color: #c8c8c8;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        max-width: 150px;
+        vertical-align: middle;
+        padding: 0 4px;
+      }
+
+      td.legend-value {
+        color: #888;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        vertical-align: middle;
+        padding: 0 6px;
+      }
+
+      .legend-toggle {
+        display: inline-block;
+        cursor: pointer;
+        color: #555;
+        user-select: none;
+        font-size: 8px;
+        width: 11px;
+        margin-right: 3px;
+        vertical-align: middle;
+      }
+
+      .legend-toggle:hover { color: #999; }
     </style>
   </head>
   <body>
@@ -207,7 +299,10 @@
       <span id="menubar-title">UAsset viewer</span>
     </div>
     <div id="content">
-      <div id="hex-panel"><span class="placeholder">Drop a .uasset/.umap file or use File → Open</span></div>
+      <div id="hex-column">
+        <div id="hex-col-header"></div>
+        <div id="hex-panel"><span class="placeholder">Drop a .uasset/.umap file or use File → Open</span></div>
+      </div>
       <div id="right-panel">
         <div id="summary-panel"><span class="placeholder">No file loaded</span></div>
         <div id="legend-panel"></div>

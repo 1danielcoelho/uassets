@@ -73,7 +73,7 @@ function rowHtml(
 ): string {
   const rowStart = rowIndex * bytesPerRow;
   const rowEnd   = Math.min(rowStart + bytesPerRow, bytes.length);
-  const addr     = rowStart.toString(16).padStart(8, "0");
+  const addr     = "0x" + rowStart.toString(16).padStart(8, "0");
   const half     = bytesPerRow >>> 1;
 
   let hexPart   = "";
@@ -116,6 +116,7 @@ let currentAbort: AbortController | null = null;
 
 export function initHexView(
   container: HTMLElement,
+  headerEl: HTMLElement,
   buffer: ArrayBuffer,
   result: ParseResult,
   options: Options,
@@ -129,6 +130,14 @@ export function initHexView(
   const bytesPerRow = options.bytesPerRow;
   const totalRows   = Math.ceil(result.totalBytes / bytesPerRow);
   const totalHeight = totalRows * ROW_HEIGHT;
+
+  // ── Column header (lives outside the scroll area) ─────────────────────────
+  const bytesColWidth = bytesPerRow * 19 + (bytesPerRow - 1) * 2 + 6;
+  const asciiColWidth = bytesPerRow * 8;
+  headerEl.innerHTML =
+    `<span style="width:82px">Address</span>` +
+    `<span style="width:${bytesColWidth}px">Bytes (raw)</span>` +
+    `<span style="width:${asciiColWidth}px">Bytes (ASCII)</span>`;
 
   // ── DOM structure ────────────────────────────────────────────────────────
   container.innerHTML = "";
