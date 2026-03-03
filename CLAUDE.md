@@ -38,6 +38,10 @@ uassets/
 │   │   ├── parser.ts          # parseUAsset — main orchestrator + all segment parsing functions
 │   │   ├── dispatch.ts        # Class-specific parser registry and dispatch
 │   │   └── tagged-properties.ts  # FProperty / FPropertyTag parsing
+│   ├── ui/
+│   │   ├── app.ts             # File open/drop wiring, summary panel rendering, dev auto-load
+│   │   ├── hex-view.ts        # Virtual-scrolling hex viewer with color-coded byte ranges
+│   │   └── legend.ts          # Legend table (swatch/size/name/value columns, collapsible groups)
 │   └── types.ts               # Shared types (ByteRange, ParseResult, AssetSummary, etc.)
 ├── test/
 │   ├── assets/5_7_3/          # Sample UE 5.7.3 .uasset/.umap files for regression tests
@@ -49,13 +53,12 @@ uassets/
 │   │   └── T_shapes.uasset
 │   └── parser/
 │       └── parse-all.test.ts
-├── index.html                 # Shell HTML (loads bundle) — not yet implemented
+├── index.html                 # Full UI shell (menu bar, hex column, right panel)
+├── dev.ts                     # Bun dev server with live-reload SSE
 ├── package.json
 ├── tsconfig.json
 └── bunfig.toml
 ```
-
-Note: The viewer/UI files (hex-view.ts, legend.ts, app.ts, etc.) do not exist yet — that's a future milestone.
 
 ## Layout
 
@@ -95,9 +98,12 @@ Note: The viewer/UI files (hex-view.ts, legend.ts, app.ts, etc.) do not exist ye
 - `IntersectionObserver` on legend table rows: grays out entries whose byte ranges are entirely outside the current hex view viewport
 
 ### Legend table
-- A `<table>` element with columns: `[swatch]` | `[Name]` | `[Value]`
-- Initially: those three columns. Additional columns (Start, Size, Type) can be added later without structural changes
-- Clicking a legend row scrolls the hex view to that range
+- A `<table>` element with columns: `[swatch]` | `[Bytes]` | `[Name]` | `[Value]`
+- `table-layout: fixed` — columns never auto-resize based on content; long names get ellipsis
+- Groups are collapsible; clicking a group row expands/collapses its direct children
+- Collapse state is derived from DOM visibility (not a closure boolean) so that collapsing a parent
+  and re-expanding it leaves inner groups in a correctly-collapsed state (icons + toggle behaviour)
+- Clicking a legend row scrolls the hex view to that range (TODO: not yet implemented)
 
 ### Summary Panel
 
@@ -127,7 +133,7 @@ Menu bar items:
 
 The parser is fully refactored and all 6 test assets pass (6/6).
 
-**Parser file layout (post-cleanup):**
+**Parser file layout:**
 - `src/parser/types.ts` — UE primitive interfaces (FGuid, FEngineVersion, FObjectExport, FObjectImport, etc.)
 - `src/parser/utils.ts` — resolveName, resolveClass, fGuidToString, fEngineVersionToString
 - `src/parser/summary.ts` — parsePackageFileSummary (fixed header only) + UE version constants
@@ -138,11 +144,11 @@ The parser is fully refactored and all 6 test assets pass (6/6).
 - `src/parser/tagged-properties.ts` — FPropertyTag parsing (UE5 new + old format)
 
 **Sections parsed and annotated:**
-- Magic number, file versions (UE4/UE5), package flags, package name/group
+- Package Header (magic, file versions UE4/UE5, package flags, package name/group) — all one group
 - Thumbnail Table (TOC + image data blobs — JPEG/PNG with dimensions)
 - Names Table (FString name + case-preserving hash per entry)
 - Soft Object Paths, Gatherable Text Data, Import Map, Export Map
-- Cell Export Map, Cell Import Map, Depends Map
+- Cell Export Map, Cell Import Map, Depends Map (with resolved object names)
 - Soft Package References, Searchable Names
 - Asset Registry Data (DependencyDataOffset + object+tag records + dependency blob)
 - World Tile Info (opaque blob)
@@ -150,27 +156,39 @@ The parser is fully refactored and all 6 test assets pass (6/6).
 - Metadata (NumObjectMeta + NumRootMeta entries with int32 soft path index + TMap<FName,FString>)
 - Exports Footer Tag (0x9E2A83C1 at bulkDataStartOffset)
 - PackageTrailer (FHeader + FLookupTableEntry × N + payload blobs + FFooter)
-- Export object data (property tags loop + object-specific data region)
+- Exports group → per-export group → Properties group → per-property group + Export Tail
+
+## State of UI
+
+The full UI is implemented and working:
+- **`src/ui/app.ts`** — file open/drop, summary panel, dev auto-load of SM_cube.uasset
+- **`src/ui/hex-view.ts`** — virtual-scrolling hex viewer; `BYTES_PER_ROW = 16`; byte cells colored
+  by top-level annotation range; `AbortController` cleans up on new file
+- **`src/ui/legend.ts`** — legend table with swatch/bytes/name/value columns; collapsible groups;
+  DOM-derived expand state (immune to parent-collapse/re-expand stale state bug); `table-layout: fixed`
+- **`index.html`** — full layout: menu bar, hex-column (header + panel), right-panel (summary + legend)
+- **`dev.ts`** — Bun HTTP dev server with SSE live-reload
 
 ## Next steps
 
 - **Different approach for picking colors** — Right now the code defines a PALETTE of colors, and indexes
   into them modulo their size. What we should do instead is have a function that produces a color for any
   string, by hashing the string and using that to produce a hue color for a HSV color
-- **Color according to expansion** — Right now only top level entries have colors, and things inside
-  groups don't seem to have a color on the legends view. The hex view only colors the top level groups
-  also. What should happen is that once you expand a group, its contents also should get colors and
-  become differently colored on the hex view
-- **Hex ↔ legend hover sync** — hovering a legend row should highlight the matching byte
-  range in the hex view, and vice versa. Uses `ViewerState.hoveredRange` + IntersectionObserver
-  for greying out off-screen legend entries.
+- **Color according to expansion** — Right now only top-level entries have colors; things inside groups
+  have no color in the legend or hex view. When a group is expanded, its children should get their own
+  colors and be distinctly colored in the hex view
+- **Hex ↔ legend hover sync** — hovering a legend row should highlight the matching byte range in the
+  hex view, and vice versa; greying out off-screen legend entries via IntersectionObserver
+- **Click to scroll** — clicking on a segment in the hex view should scroll to and expand the corresponding
+  legend in the legend view. Clicking on a legend in the legend view should scroll the hex view to show the
+  start of the same section (even if the same click expands or collapses a group)
 
 ## Future ideas
 
 - **Search**: Allow user to search for bytes and also text
 - **Go to**: Allow user to type an address in hex or decimal to go to that location
-- **Resizeable divider** - Between the hex view and the legend view
-- **Example assets** - Instead of just the placeholder text, show some buttons too for easily opening an example
+- **Resizeable divider** — Between the hex view and the legend view
+- **Example assets** — Instead of just placeholder text, show buttons for easily opening an example
 
 # Bun
 
