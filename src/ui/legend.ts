@@ -26,24 +26,42 @@ export function initLegend(container: HTMLElement, ranges: ByteRange[]): void {
   table.className = "legend-table";
   container.appendChild(table);
 
+  // ── Sticky header ──
+  const thead = table.createTHead();
+  const hrow = thead.insertRow();
+  hrow.className = "legend-header-row";
+  for (const [cls, text] of [
+    ["legend-swatch", ""],
+    ["legend-size",   "Bytes"],
+    ["legend-name",   "Name"],
+    ["legend-value",  "Value"],
+  ] as [string, string][]) {
+    const th = document.createElement("th");
+    th.className = cls;
+    th.textContent = text;
+    hrow.appendChild(th);
+  }
+
+  // ── Rows ──
+  const tbody = table.createTBody();
   for (let i = 0; i < ranges.length; i++) {
-    buildRows(table, ranges[i]!, PALETTE[i % PALETTE.length]!, 0);
+    buildRows(tbody, ranges[i]!, PALETTE[i % PALETTE.length]!, 0);
   }
 }
 
 // ── Row builder ───────────────────────────────────────────────────────────────
 
 function buildRows(
-  table: HTMLTableElement,
+  tbody: HTMLTableSectionElement,
   range: ByteRange,
   color: string,
   depth: number,
 ): HTMLTableRowElement[] {
-  const isGroup    = range.kind === "group";
+  const isGroup     = range.kind === "group";
   const hasChildren = isGroup && (range as Extract<ByteRange, { kind: "group" }>).children.length > 0;
 
   const tr = document.createElement("tr");
-  tr.className = "legend-row";
+  tr.className = hasChildren ? "legend-row legend-group-row" : "legend-row";
 
   // ── Swatch ──
   const swatchTd = document.createElement("td");
@@ -62,20 +80,17 @@ function buildRows(
   sizeTd.textContent = formatSize(range.end - range.start);
   tr.appendChild(sizeTd);
 
-  // ── Name (with indent + optional toggle) ──
+  // ── Name (with indent; toggle goes after label for groups) ──
   const nameTd = document.createElement("td");
   nameTd.className = "legend-name";
-  // Each depth level adds 12px; non-toggle items add 14px more to align text with toggled items
-  const baseIndent = depth * 12 + 4;
+  nameTd.style.paddingLeft = `${depth * 12 + 4}px`;
   if (hasChildren) {
-    nameTd.style.paddingLeft = `${baseIndent}px`;
+    nameTd.appendChild(document.createTextNode(range.label + " "));
     const toggle = document.createElement("span");
     toggle.className = "legend-toggle";
     toggle.textContent = "▶";
     nameTd.appendChild(toggle);
-    nameTd.appendChild(document.createTextNode("\u00a0" + range.label));
   } else {
-    nameTd.style.paddingLeft = `${baseIndent + 14}px`;
     nameTd.textContent = range.label;
   }
   tr.appendChild(nameTd);
@@ -86,7 +101,7 @@ function buildRows(
   valueTd.textContent = valueStr(range);
   tr.appendChild(valueTd);
 
-  table.appendChild(tr);
+  tbody.appendChild(tr);
   const result: HTMLTableRowElement[] = [tr];
 
   // ── Children ──
@@ -95,18 +110,19 @@ function buildRows(
     const descendantRows: HTMLTableRowElement[] = [];
 
     for (const child of children) {
-      const rows = buildRows(table, child, color, depth + 1);
+      const rows = buildRows(tbody, child, color, depth + 1);
       descendantRows.push(...rows);
       result.push(...rows);
     }
 
-    // All groups start collapsed — hide descendants immediately
+    // All groups start collapsed
     for (const row of descendantRows) row.style.display = "none";
 
     const toggleEl = nameTd.querySelector<HTMLElement>(".legend-toggle")!;
     let expanded = false;
-    toggleEl.addEventListener("click", (e) => {
-      e.stopPropagation();
+
+    // Entire row is the click target
+    tr.addEventListener("click", () => {
       expanded = !expanded;
       toggleEl.textContent = expanded ? "▼" : "▶";
       for (const row of descendantRows) {
@@ -146,8 +162,8 @@ function valueStr(range: ByteRange): string {
 }
 
 function formatSize(n: number): string {
-  if (n < 1024) return `${n} B`;
-  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
-  if (n < 1024 * 1024 * 1024) return `${(n / (1024 * 1024)).toFixed(1)} MB`;
-  return `${(n / (1024 * 1024 * 1024)).toFixed(2)} GB`;
+  if (n < 1024) return `${n}`;
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} K`;
+  if (n < 1024 * 1024 * 1024) return `${(n / (1024 * 1024)).toFixed(1)} M`;
+  return `${(n / (1024 * 1024 * 1024)).toFixed(2)} G`;
 }

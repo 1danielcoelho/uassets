@@ -162,6 +162,8 @@ The parser is fully refactored and all 6 test assets pass (6/6).
 
 - **Search**: Allow user to search for bytes and also text
 - **Go to**: Allow user to type an address in hex or decimal to go to that location
+- **Resizeable divider** - Between the hex view and the legend view
+- **Example assets** - Instead of just the placeholder text, show some buttons too for easily opening an example
 
 # Bun
 

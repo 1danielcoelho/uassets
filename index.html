@@ -116,6 +116,8 @@
         user-select: none;
       }
 
+      #hex-col-header span { text-align: center; }
+
       /* ── Hex rows ── */
       .hex-row {
         height: 20px;         /* must match ROW_HEIGHT in hex-view.ts */
@@ -174,7 +176,7 @@
 
       /* ── Right column ── */
       #right-panel {
-        width: 380px;
+        width: 520px;
         flex-shrink: 0;
         display: flex;
         flex-direction: column;
@@ -212,6 +214,7 @@
         flex: 1;
         overflow-y: auto;
         background: #1e1e1e;
+        padding-bottom: 8px;
       }
 
       .placeholder {
@@ -226,16 +229,42 @@
         font-size: 11px;
       }
 
+      .legend-header-row th {
+        position: sticky;
+        top: 0;
+        background: #1e1e1e;
+        color: #555;
+        font-size: 10px;
+        font-weight: normal;
+        text-align: center;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        border-bottom: 1px solid #2a2a2a;
+        /* Use longhand so per-column horizontal padding from .legend-* still applies */
+        padding-top: 4px;
+        padding-bottom: 5px;
+        user-select: none;
+        z-index: 1;
+      }
+
       .legend-row {
         border-bottom: 1px solid #1f1f1f;
         height: 22px;
       }
 
-      .legend-row:hover { background: #252525; }
+      .legend-row:not(.legend-group-row):hover { background: #252525; }
 
-      td.legend-swatch {
+      .legend-group-row {
+        background: #232323;
+        cursor: pointer;
+        user-select: none;
+      }
+
+      .legend-group-row:hover { background: #2c2c2c; }
+
+      .legend-swatch {
         width: 18px;
-        padding: 0 2px 0 6px;
+        padding: 0 2px 0 14px;
         vertical-align: middle;
       }
 
@@ -245,7 +274,7 @@
         border-radius: 2px;
       }
 
-      td.legend-size {
+      .legend-size {
         width: 54px;
         color: #555;
         text-align: right;
@@ -255,37 +284,33 @@
         font-size: 10px;
       }
 
-      td.legend-name {
-        color: #c8c8c8;
+      .legend-name {
+        color: #d4d4d4;
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
-        max-width: 150px;
+        width: 40%;
         vertical-align: middle;
         padding: 0 4px;
       }
 
-      td.legend-value {
+      .legend-value {
         color: #888;
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
         vertical-align: middle;
-        padding: 0 6px;
+        padding: 0 14px 0 6px;
       }
 
       .legend-toggle {
         display: inline-block;
-        cursor: pointer;
-        color: #555;
-        user-select: none;
+        color: #666;
         font-size: 8px;
         width: 11px;
         margin-right: 3px;
         vertical-align: middle;
       }
-
-      .legend-toggle:hover { color: #999; }
     </style>
   </head>
   <body>
