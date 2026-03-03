@@ -158,6 +158,11 @@ The parser is fully refactored and all 6 test assets pass (6/6).
    description above for the planned hex view + summary + legend layout.
    Key files to create: `src/ui/app.ts`, `src/ui/hex-view.ts`, `src/ui/legend.ts`
 
+## Future ideas
+
+- **Search**: Allow user to search for bytes and also text
+- **Go to**: Allow user to type an address in hex or decimal to go to that location
+
 # Bun
 
 Default to using Bun instead of Node.js.
