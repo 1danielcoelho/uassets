@@ -127,7 +127,7 @@ export function parseTaggedProperties(
     r.seek(savedPos);
 
     if (newFormat) {
-      r.group(`Property: ${propName}`, () => {
+      r.group(propName, () => {
         r.readInt32("Name Index");
         r.readInt32(); // instance number
 
@@ -158,7 +158,7 @@ export function parseTaggedProperties(
       });
     } else {
       // Old format (pre-1012): separate FName fields for type.
-      r.group(`Property: ${propName}`, () => {
+      r.group(propName, () => {
         r.readInt32("Name Index");
         r.readInt32(); // instance number
 

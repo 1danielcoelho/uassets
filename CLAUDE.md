@@ -154,6 +154,13 @@ The parser is fully refactored and all 6 test assets pass (6/6).
 
 ## Next steps
 
+- **Different approach for picking colors** — Right now the code defines a PALETTE of colors, and indexes
+  into them modulo their size. What we should do instead is have a function that produces a color for any
+  string, by hashing the string and using that to produce a hue color for a HSV color
+- **Color according to expansion** — Right now only top level entries have colors, and things inside
+  groups don't seem to have a color on the legends view. The hex view only colors the top level groups
+  also. What should happen is that once you expand a group, its contents also should get colors and
+  become differently colored on the hex view
 - **Hex ↔ legend hover sync** — hovering a legend row should highlight the matching byte
   range in the hex view, and vice versa. Uses `ViewerState.hoveredRange` + IntersectionObserver
   for greying out off-screen legend entries.

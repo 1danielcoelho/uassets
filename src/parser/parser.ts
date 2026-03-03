@@ -32,6 +32,23 @@ import { dispatchExport } from "./dispatch.ts";
 import { parseTaggedProperties } from "./tagged-properties.ts";
 import type { ParseResult, AssetSummary } from "../types.ts";
 
+// ── Package index resolver ────────────────────────────────────────────────────
+
+function resolvePackageIndex(
+  imports: FObjectImport[],
+  exports: FObjectExport[],
+  names: string[],
+  idx: number,
+): string {
+  if (idx === 0) return "None";
+  if (idx > 0) {
+    const exp = exports[idx - 1];
+    return exp ? resolveName(names, exp.objectName) : `<export#${idx}>`;
+  }
+  const imp = imports[-idx - 1];
+  return imp ? resolveName(names, imp.objectName) : `<import#${idx}>`;
+}
+
 // ── Names table ───────────────────────────────────────────────────────────────
 
 function parseNamesTable(r: BinaryReader, h: PackageFileSummaryData): string[] {
@@ -232,6 +249,8 @@ function parseIndexTables(
   r: BinaryReader,
   h: PackageFileSummaryData,
   names: string[],
+  importsList: FObjectImport[],
+  exportsList: FObjectExport[],
 ): string[] {
   // Depends Map — one TArray<FPackageIndex> per export.
   if (h.dependsOffset > 0 && h.exportCount > 0) {
@@ -240,12 +259,12 @@ function parseIndexTables(
       for (let i = 0; i < h.exportCount; i++) {
         r.group(`Depends[${i}]`, () => {
           const count = r.readInt32();
-          const deps: number[] = [];
+          const resolved: string[] = [];
           for (let j = 0; j < count; j++) {
-            const idx = r.readInt32(`Dep[${j}]`);
-            deps.push(idx);
+            const idx = r.readInt32();
+            resolved.push(resolvePackageIndex(importsList, exportsList, names, idx));
           }
-          return deps.length > 0 ? deps.join(", ") : "(none)";
+          return resolved.length > 0 ? resolved.join(", ") : "(none)";
         });
       }
     });
@@ -643,7 +662,9 @@ function parseGenericExport(
     }
 
     r.seek(absScriptStart);
-    parseTaggedProperties(r, names, absScriptEnd, fileVersionUE5);
+    r.group("Properties", () => {
+      parseTaggedProperties(r, names, absScriptEnd, fileVersionUE5);
+    });
 
     const tail = (offset + size) - absScriptEnd;
     if (tail > 0) {
@@ -669,7 +690,7 @@ export function parseUAsset(buffer: ArrayBuffer): ParseResult {
   const exports = parseExportsTable(r, h, names);
 
   // Phase 2.5: Remaining index tables
-  const softObjectPaths = parseIndexTables(r, h, names);
+  const softObjectPaths = parseIndexTables(r, h, names, imports, exports);
 
   // Phase 2.9: Opaque and structured blob sections
   parseOpaqueBlobs(r, h, names);
@@ -677,28 +698,36 @@ export function parseUAsset(buffer: ArrayBuffer): ParseResult {
   // Phase 2.95: Metadata (after opaque blobs; needs softObjectPaths)
   parseMetadata(r, h, names, softObjectPaths);
 
-  // Phase 3: Export data — each export is wrapped in its own group
-  for (const exp of exports) {
-    const cls        = resolveClass(imports, exports, names, exp.classIndex);
-    const objectName = resolveName(names, exp.objectName);
-    const offset     = Number(exp.serialOffset);
-    const size       = Number(exp.serialSize);
-    if (offset <= 0 || size <= 0) continue;
+  // Phase 3: Export data — all exports under one "Exports" group
+  const firstExportOffset = exports
+    .map(e => Number(e.serialOffset))
+    .filter(o => o > 0)
+    .sort((a, b) => a - b)[0];
+  if (firstExportOffset !== undefined) r.seek(firstExportOffset);
 
-    r.seek(offset);
-    r.group(`Export: ${objectName}`, () => {
-      const handled = dispatchExport(
-        r, cls, offset, size, names, h.fileVersionUE4, h.fileVersionUE5,
-        Number(exp.scriptSerializationStartOffset),
-        Number(exp.scriptSerializationEndOffset),
-      );
-      if (!handled) {
-        r.seek(offset);
-        parseGenericExport(r, exp, cls, names, h.fileVersionUE5);
-      }
-      return cls;
-    });
-  }
+  r.group("Exports", () => {
+    for (const exp of exports) {
+      const cls        = resolveClass(imports, exports, names, exp.classIndex);
+      const objectName = resolveName(names, exp.objectName);
+      const offset     = Number(exp.serialOffset);
+      const size       = Number(exp.serialSize);
+      if (offset <= 0 || size <= 0) continue;
+
+      r.seek(offset);
+      r.group(objectName, () => {
+        const handled = dispatchExport(
+          r, cls, offset, size, names, h.fileVersionUE4, h.fileVersionUE5,
+          Number(exp.scriptSerializationStartOffset),
+          Number(exp.scriptSerializationEndOffset),
+        );
+        if (!handled) {
+          r.seek(offset);
+          parseGenericExport(r, exp, cls, names, h.fileVersionUE5);
+        }
+        return cls;
+      });
+    }
+  });
 
   // Build result
   const assetClass = (() => {

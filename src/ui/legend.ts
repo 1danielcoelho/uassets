@@ -121,18 +121,24 @@ function buildRows(
     for (const row of allDescendantRows) row.style.display = "none";
 
     const toggleEl = nameTd.querySelector<HTMLElement>(".legend-toggle")!;
-    let expanded = false;
 
-    // Entire row is the click target
+    // Entire row is the click target.
+    // State is derived from the DOM so that a parent collapsing (hiding our row)
+    // and re-expanding never leaves us with a stale expanded=true closure variable.
     tr.addEventListener("click", () => {
-      expanded = !expanded;
-      toggleEl.textContent = expanded ? "▼" : "▶";
-      if (expanded) {
-        // Only show direct children; each inner group manages its own collapsed state
-        for (const row of directChildRows) row.style.display = "";
+      const isExpanded = directChildRows.length > 0 && directChildRows[0]!.style.display !== "none";
+      if (isExpanded) {
+        // Collapse: hide ALL descendants and reset their toggle icons to ▶
+        toggleEl.textContent = "▶";
+        for (const row of allDescendantRows) {
+          row.style.display = "none";
+          const innerToggle = row.querySelector<HTMLElement>(".legend-toggle");
+          if (innerToggle) innerToggle.textContent = "▶";
+        }
       } else {
-        // Collapse: hide ALL descendants so inner groups reset visually
-        for (const row of allDescendantRows) row.style.display = "none";
+        // Expand: show only direct children; each inner group manages its own state
+        toggleEl.textContent = "▼";
+        for (const row of directChildRows) row.style.display = "";
       }
     });
   }
