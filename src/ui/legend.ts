@@ -107,16 +107,18 @@ function buildRows(
   // ── Children ──
   if (hasChildren) {
     const children = (range as Extract<ByteRange, { kind: "group" }>).children;
-    const descendantRows: HTMLTableRowElement[] = [];
+    const allDescendantRows: HTMLTableRowElement[] = [];
+    const directChildRows:   HTMLTableRowElement[] = [];
 
     for (const child of children) {
       const rows = buildRows(tbody, child, color, depth + 1);
-      descendantRows.push(...rows);
+      allDescendantRows.push(...rows);
+      directChildRows.push(rows[0]!); // first row is the child's own <tr>
       result.push(...rows);
     }
 
     // All groups start collapsed
-    for (const row of descendantRows) row.style.display = "none";
+    for (const row of allDescendantRows) row.style.display = "none";
 
     const toggleEl = nameTd.querySelector<HTMLElement>(".legend-toggle")!;
     let expanded = false;
@@ -125,8 +127,12 @@ function buildRows(
     tr.addEventListener("click", () => {
       expanded = !expanded;
       toggleEl.textContent = expanded ? "▼" : "▶";
-      for (const row of descendantRows) {
-        row.style.display = expanded ? "" : "none";
+      if (expanded) {
+        // Only show direct children; each inner group manages its own collapsed state
+        for (const row of directChildRows) row.style.display = "";
+      } else {
+        // Collapse: hide ALL descendants so inner groups reset visually
+        for (const row of allDescendantRows) row.style.display = "none";
       }
     });
   }

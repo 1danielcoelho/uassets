@@ -154,9 +154,9 @@ The parser is fully refactored and all 6 test assets pass (6/6).
 
 ## Next steps
 
-- **Implement HTML user interface** — this is the next major milestone. See the layout
-   description above for the planned hex view + summary + legend layout.
-   Key files to create: `src/ui/app.ts`, `src/ui/hex-view.ts`, `src/ui/legend.ts`
+- **Hex ↔ legend hover sync** — hovering a legend row should highlight the matching byte
+  range in the hex view, and vice versa. Uses `ViewerState.hoveredRange` + IntersectionObserver
+  for greying out off-screen legend entries.
 
 ## Future ideas
 

@@ -661,7 +661,7 @@ export function parseUAsset(buffer: ArrayBuffer): ParseResult {
   const r = new BinaryReader(buffer);
 
   // Phase 1: Fixed header
-  const h = parsePackageFileSummary(r);
+  const h = r.group("Package Header", () => parsePackageFileSummary(r));
 
   // Phase 2: Index tables
   const names   = parseNamesTable(r, h);
@@ -677,24 +677,27 @@ export function parseUAsset(buffer: ArrayBuffer): ParseResult {
   // Phase 2.95: Metadata (after opaque blobs; needs softObjectPaths)
   parseMetadata(r, h, names, softObjectPaths);
 
-  // Phase 3: Export data
+  // Phase 3: Export data — each export is wrapped in its own group
   for (const exp of exports) {
-    const cls    = resolveClass(imports, exports, names, exp.classIndex);
-    const offset = Number(exp.serialOffset);
-    const size   = Number(exp.serialSize);
+    const cls        = resolveClass(imports, exports, names, exp.classIndex);
+    const objectName = resolveName(names, exp.objectName);
+    const offset     = Number(exp.serialOffset);
+    const size       = Number(exp.serialSize);
     if (offset <= 0 || size <= 0) continue;
 
     r.seek(offset);
-    const handled = dispatchExport(
-      r, cls, offset, size, names, h.fileVersionUE4, h.fileVersionUE5,
-      Number(exp.scriptSerializationStartOffset),
-      Number(exp.scriptSerializationEndOffset),
-    );
-
-    if (!handled) {
-      r.seek(offset);
-      parseGenericExport(r, exp, cls, names, h.fileVersionUE5);
-    }
+    r.group(`Export: ${objectName}`, () => {
+      const handled = dispatchExport(
+        r, cls, offset, size, names, h.fileVersionUE4, h.fileVersionUE5,
+        Number(exp.scriptSerializationStartOffset),
+        Number(exp.scriptSerializationEndOffset),
+      );
+      if (!handled) {
+        r.seek(offset);
+        parseGenericExport(r, exp, cls, names, h.fileVersionUE5);
+      }
+      return cls;
+    });
   }
 
   // Build result
