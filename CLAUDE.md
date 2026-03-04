@@ -171,6 +171,19 @@ The full UI is implemented and working:
 
 ## Next steps
 
+- **Cleanup and minor tweaks**:
+   - It shows the name of the opened file next to the File button on the menu bar. I don't like that: Remove it
+     from there, however on the summary panel do display the filename like that as well. It would be good if you
+     could display any additional information you can get from the file generically (maybe last modified date,
+     things like that. Not sure if possible when uploading a file like this)
+   - `formatBytes` is using 1024 for kilo, and 1024 * 1024 for mega, etc. I want it to use 1000 for kilo, 1 million
+     for mega, etc. (as those are SI prefixes)
+   - Move the stuff in `colors.ts` and `formatBytes`, `escHtml` from app.ts to a new `utils.ts` file in the `ui` folder. Move `colorForByte` and `escChr` there as well, and any other of these simple utils functions to their respective utils files
+   - Actually, maybe `escChr` and `escHtml` can be combined somehow?
+   - Remove `ActiveRange`, and just use `ColoredRange` everywhere
+   - in `initHexView` the function `applyHoveredClass` is spammed on mouse events, and does two big queries... Can you optimize this a bit? For example you can just track the last elements you added hovered to, and on the next call use those references to remove the hovered class
+   - There are some `// TODO:` comments in the code mentioning other things that need cleanup
+   - There are a couple errors on hex-view.ts within `applyHoveredClass` saying `Type 'NodeListOf<HTMLElement>' must have a '[Symbol.iterator]()' method that returns an iterator.ts(2488)`
 - **Click to expand** — clicking on a group annotation on the hex view should also expand the group on the legend
   view, which should in turn cause the group to be broken up into the coloring the individual child annotations.
   You should be able to progressively click on nested to "step into them" in that way, as if you're expanding
@@ -178,6 +191,8 @@ The full UI is implemented and working:
 - **Click to scroll** — clicking on a segment in the hex view should scroll to and expand the corresponding
   legend in the legend view. Clicking on a legend in the legend view should scroll the hex view to show the
   start of the same section (even if the same click expands or collapses a group)
+- **Contiguous selection** — This may be very difficult or make a mess, so feel free to push back, but it would be nice if doing a text select that starts on the bytes (raw) column only selected stuff in the bytes (raw) column. As it is now, doing a text selection treats the address, bytes (raw) and bytes (ascii) text as contiguous, which is not right
+- **Sync selection** — I don't want to mess with the standard mouse behavior too much, but it would be nice if selecting a section on the bytes (raw) view selected the same section on the bytes (ascii) view in some (visual) way. It doesn't have to add it to the actual selection, but at least highlight it so that we know what corresponds to what. The same would happen when selecting something on the Bytes (ascii) view
 - **Display thumbnails** — When expanding a `Thumbnail Data` group, one of the entries should be a `JPEG Data`.
   It would be really cool if that data were parsed as an actual JPEG and displayed in another row below
   (maybe this row would need to be a bit taller to display the thumbnail in a decent size). It would also be

@@ -82,8 +82,8 @@ export function initLegend(
 
   // ── Table hover handlers ──
   table.addEventListener("mouseover", (e) => {
-    const tr    = (e.target as HTMLElement).closest<HTMLTableRowElement>("tr[data-hrange]");
-    const start = tr ? Number(tr.getAttribute("data-hrange")) : null;
+    const tr    = (e.target as HTMLElement).closest<HTMLTableRowElement>("tr[data-byteoffset]");
+    const start = tr ? Number(tr.getAttribute("data-byteoffset")) : null;
     if (start === lastHoveredStart) return;
     lastHoveredStart = start;
     handle.onHoverChange?.(start);
@@ -136,7 +136,7 @@ function buildRows(
 
   const tr = document.createElement("tr");
   tr.className = hasChildren ? "legend-row legend-group-row" : "legend-row";
-  tr.setAttribute("data-hrange", String(range.start));
+  tr.setAttribute("data-byteoffset", String(range.start));
   const existing = rowMap.get(range.start);
   if (existing) existing.push(tr);
   else rowMap.set(range.start, [tr]);

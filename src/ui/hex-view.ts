@@ -12,7 +12,6 @@ interface ColoredRange {
   start: number;
   end: number;
   color: string;
-  idx: number;
 }
 
 export interface HexViewHandle {
@@ -28,7 +27,6 @@ function buildColorMap(ranges: ActiveRange[]): ColoredRange[] {
     start: r.start,
     end:   r.end,
     color: colorForLabel(r.label),
-    idx:   i,
   }));
 }
 
@@ -65,21 +63,14 @@ function rowHtml(
   const addr     = "0x" + rowStart.toString(16).padStart(8, "0");
   const half     = bytesPerRow >>> 1;
 
-  // Pre-compute which range covers each column so we can check neighbors cheaply.
-  const rowCrs: (ColoredRange | null)[] = new Array(bytesPerRow);
-  for (let c = 0; c < bytesPerRow; c++) {
-    const off = rowStart + c;
-    rowCrs[c] = off < rowEnd ? colorForByte(off, colorMap) : null;
-  }
-
   let hexPart   = "";
   let asciiPart = "";
 
   for (let col = 0; col < bytesPerRow; col++) {
     const offset = rowStart + col;
     const inFile = offset < rowEnd;
-    const cr     = rowCrs[col] ?? null;
-    const rAttr  = cr ? ` data-range="${cr.idx}" data-hrange="${cr.start}"` : "";
+    const cr     = offset < rowEnd ? colorForByte(offset, colorMap) : null;
+    const rAttr  = cr ? ` data-byteoffset="${cr.start}"` : "";
     const midCls = col === half - 1 ? " mid" : "";
 
     if (inFile) {
@@ -88,28 +79,9 @@ function rowHtml(
       const chr  = (byte >= 32 && byte < 127) ? escChr(String.fromCharCode(byte)) : "·";
 
       if (cr) {
-        const prevCr = rowCrs[col - 1] ?? null;
-        const nextCr = rowCrs[col + 1] ?? null;
-        const prevSame = prevCr?.start === cr.start;
-        // The mid-gap (.b.mid has extra margin-right) is a visual break even within
-        // the same annotation; treat the byte before it as a run end.
-        const nextSame = nextCr?.start === cr.start && col !== half - 1;
-
-        // Apply border-radius only on the "open" (non-connecting) ends of the run.
-        // Where the same annotation continues, keep the edge flat so the block looks solid.
-        const lR = prevSame ? 0 : 2;
-        const rR = nextSame ? 0 : 2;
-        const hexRadius = lR === rR ? `${lR}px` : `${lR}px ${rR}px ${rR}px ${lR}px`;
-        // Fill the 2px flex gap only when the immediately next byte is the same annotation.
-        const hexShadow = nextSame ? `;box-shadow:2px 0 0 ${cr.color}` : "";
-        const hexBg = ` style="background:${cr.color};border-radius:${hexRadius}${hexShadow}"`;
-
-        // ASCII has no flex gap so no shadow; apply the same rounding logic independently
-        // (no mid-gap concept in ASCII — bytes are always packed tightly).
-        const lA = prevSame ? 0 : 1;
-        const rA = nextCr?.start === cr.start ? 0 : 1;
-        const asciiRadius = lA === rA ? `${lA}px` : `${lA}px ${rA}px ${rA}px ${lA}px`;
-        const asciiBg = ` style="background:${cr.color};border-radius:${asciiRadius}"`;
+        const hexShadow = `;box-shadow:2px 0 0 ${cr.color}`;
+        const hexBg = ` style="background:${cr.color};border-radius:0px${hexShadow}"`;
+        const asciiBg = ` style="background:${cr.color};border-radius:0px"`;
 
         hexPart   += `<span class="b${midCls}"${rAttr}${hexBg}>${hex}</span>`;
         asciiPart += `<span class="c"${rAttr}${asciiBg}>${chr}</span>`;
@@ -139,21 +111,23 @@ let currentAbort: AbortController | null = null;
 export function initHexView(
   container: HTMLElement,
   headerEl: HTMLElement,
-  buffer: ArrayBuffer,
-  result: ParseResult,
+  fileBytes: ArrayBuffer,
+  parsedAsset: ParseResult,
   options: Options,
 ): HexViewHandle {
   currentAbort?.abort();
   currentAbort = new AbortController();
   const { signal } = currentAbort;
 
-  const bytes       = new Uint8Array(buffer);
-  let colorMap      = buildColorMap(result.ranges.map(r => ({ start: r.start, end: r.end, label: r.label })));
+  const fileBytesArray = new Uint8Array(fileBytes);
+  let colorMap = buildColorMap(parsedAsset.ranges.map(r => ({ start: r.start, end: r.end, label: r.label })));
   const bytesPerRow = options.bytesPerRow;
-  const totalRows   = Math.ceil(result.totalBytes / bytesPerRow);
+  const totalRows = Math.ceil(parsedAsset.totalBytes / bytesPerRow);
   const totalHeight = totalRows * ROW_HEIGHT;
 
   // ── Column header ─────────────────────────────────────────────────────────
+  // TODO: What are these magic numbers here? If they are constants, hoist them to the top of the file
+  // maybe these could even be Options, so that we could configure the layout a bit? (just guessing)
   const bytesColWidth = bytesPerRow * 19 + (bytesPerRow - 1) * 2 + 6;
   const asciiColWidth = bytesPerRow * 8;
   headerEl.innerHTML =
@@ -173,14 +147,14 @@ export function initHexView(
   spacer.appendChild(rowsEl);
 
   // ── Hover state ──────────────────────────────────────────────────────────
-  let hoveredHrange: number | null = null;
+  let hoveredByteOffset: number | null = null;
 
   function applyHoveredClass(): void {
     for (const el of rowsEl.querySelectorAll<HTMLElement>(".hovered")) {
       el.classList.remove("hovered");
     }
-    if (hoveredHrange !== null) {
-      for (const el of rowsEl.querySelectorAll<HTMLElement>(`[data-hrange="${hoveredHrange}"]`)) {
+    if (hoveredByteOffset !== null) {
+      for (const el of rowsEl.querySelectorAll<HTMLElement>(`[data-byteoffset="${hoveredByteOffset}"]`)) {
         el.classList.add("hovered");
       }
     }
@@ -205,7 +179,7 @@ export function initHexView(
 
     let html = "";
     for (let r = firstRow; r < lastRow; r++) {
-      html += rowHtml(r, bytes, colorMap, bytesPerRow);
+      html += rowHtml(r, fileBytesArray, colorMap, bytesPerRow);
     }
     rowsEl.innerHTML = html;
     applyHoveredClass();
@@ -217,33 +191,33 @@ export function initHexView(
   // ── Hover event handlers ─────────────────────────────────────────────────
   container.addEventListener("mouseover", (e) => {
     const target = e.target as HTMLElement;
-    let start: number | null;
+    let offset: number | null;
 
     if (target.classList.contains("b") || target.classList.contains("c")) {
       // Actual byte / ASCII cell — read its annotation (or clear if unannotated)
-      start = target.hasAttribute("data-hrange")
-        ? Number(target.getAttribute("data-hrange"))
+      offset = target.hasAttribute("data-byteoffset")
+        ? Number(target.getAttribute("data-byteoffset"))
         : null;
     } else if (
       target === container || target === spacer || target === rowsEl ||
       target.classList.contains("hex-row") || target.classList.contains("addr")
     ) {
       // Clearly "background" (between rows, address column, outer padding) — clear
-      start = null;
+      offset = null;
     } else {
       // Inter-byte flex gaps (.bytes / .ascii containers) — ignore, keep current
       return;
     }
 
-    if (start === hoveredHrange) return;
-    hoveredHrange = start;
+    if (offset === hoveredByteOffset) return;
+    hoveredByteOffset = offset;
     applyHoveredClass();
-    handle.onHoverChange?.(start);
+    handle.onHoverChange?.(offset);
   }, { signal });
 
   container.addEventListener("mouseleave", () => {
-    if (hoveredHrange === null) return;
-    hoveredHrange = null;
+    if (hoveredByteOffset === null) return;
+    hoveredByteOffset = null;
     applyHoveredClass();
     handle.onHoverChange?.(null);
   }, { signal });
@@ -258,8 +232,8 @@ export function initHexView(
       renderWindow();
     },
 
-    setHovered(start: number | null): void {
-      hoveredHrange = start;
+    setHovered(byteOffset: number | null): void {
+      hoveredByteOffset = byteOffset;
       applyHoveredClass();
     },
   };
