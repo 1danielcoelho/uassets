@@ -15,9 +15,14 @@ interface ColoredRange {
   idx: number;
 }
 
+export interface HexViewHandle {
+  updateColorMap(ranges: ActiveRange[]): void;
+  setHovered(start: number | null): void;
+  onHoverChange: ((start: number | null) => void) | null;
+}
+
 // ── Color map ─────────────────────────────────────────────────────────────────
 
-/** Build a color map from the currently-active ranges (leaf level of the expanded tree). */
 function buildColorMap(ranges: ActiveRange[]): ColoredRange[] {
   return ranges.map((r, i) => ({
     start: r.start,
@@ -68,7 +73,8 @@ function rowHtml(
     const inFile  = offset < rowEnd;
     const cr      = inFile ? colorForByte(offset, colorMap) : null;
     const bgStyle = cr ? ` style="background:${cr.color}"` : "";
-    const rAttr   = cr ? ` data-range="${cr.idx}"` : "";
+    // data-range = color map index (for future hover-by-idx); data-hrange = stable start offset
+    const rAttr   = cr ? ` data-range="${cr.idx}" data-hrange="${cr.start}"` : "";
     const midCls  = col === half - 1 ? " mid" : "";
 
     if (inFile) {
@@ -78,7 +84,6 @@ function rowHtml(
       hexPart   += `<span class="b${midCls}"${rAttr}${bgStyle}>${hex}</span>`;
       asciiPart += `<span class="c"${rAttr}${bgStyle}>${chr}</span>`;
     } else {
-      // Padding for partial last row
       hexPart   += `<span class="b${midCls}">  </span>`;
       asciiPart += `<span class="c"> </span>`;
     }
@@ -95,7 +100,6 @@ function rowHtml(
 
 // ── Virtual scroll ────────────────────────────────────────────────────────────
 
-/** Tear down the previous hex view instance when a new file is opened. */
 let currentAbort: AbortController | null = null;
 
 export function initHexView(
@@ -104,7 +108,7 @@ export function initHexView(
   buffer: ArrayBuffer,
   result: ParseResult,
   options: Options,
-): { updateColorMap: (ranges: ActiveRange[]) => void } {
+): HexViewHandle {
   currentAbort?.abort();
   currentAbort = new AbortController();
   const { signal } = currentAbort;
@@ -115,7 +119,7 @@ export function initHexView(
   const totalRows   = Math.ceil(result.totalBytes / bytesPerRow);
   const totalHeight = totalRows * ROW_HEIGHT;
 
-  // ── Column header (lives outside the scroll area) ─────────────────────────
+  // ── Column header ─────────────────────────────────────────────────────────
   const bytesColWidth = bytesPerRow * 19 + (bytesPerRow - 1) * 2 + 6;
   const asciiColWidth = bytesPerRow * 8;
   headerEl.innerHTML =
@@ -126,20 +130,32 @@ export function initHexView(
   // ── DOM structure ────────────────────────────────────────────────────────
   container.innerHTML = "";
 
-  // Spacer establishes the full scroll height
   const spacer = document.createElement("div");
   spacer.style.cssText = `height:${totalHeight}px;position:relative;`;
   container.appendChild(spacer);
 
-  // Rows container is positioned within the spacer to sit at the rendered window
   const rowsEl = document.createElement("div");
   rowsEl.style.cssText = "position:absolute;left:0;right:0;";
   spacer.appendChild(rowsEl);
 
+  // ── Hover state ──────────────────────────────────────────────────────────
+  let hoveredHrange: number | null = null;
+
+  function applyHoveredClass(): void {
+    for (const el of rowsEl.querySelectorAll<HTMLElement>(".hovered")) {
+      el.classList.remove("hovered");
+    }
+    if (hoveredHrange !== null) {
+      for (const el of rowsEl.querySelectorAll<HTMLElement>(`[data-hrange="${hoveredHrange}"]`)) {
+        el.classList.add("hovered");
+      }
+    }
+  }
+
   // ── Render window ────────────────────────────────────────────────────────
-  let renderedFirstRow    = -1;
-  let renderedMapVersion  = -1;
-  let mapVersion          = 0;
+  let renderedFirstRow   = -1;
+  let renderedMapVersion = -1;
+  let mapVersion         = 0;
 
   function renderWindow(): void {
     const scrollTop    = container.scrollTop;
@@ -158,16 +174,44 @@ export function initHexView(
       html += rowHtml(r, bytes, colorMap, bytesPerRow);
     }
     rowsEl.innerHTML = html;
+    applyHoveredClass();
   }
 
   container.addEventListener("scroll", renderWindow, { passive: true, signal });
   renderWindow();
 
-  return {
+  // ── Hover event handlers ─────────────────────────────────────────────────
+  container.addEventListener("mouseover", (e) => {
+    const el    = (e.target as HTMLElement).closest<HTMLElement>("[data-hrange]");
+    const start = el ? Number(el.getAttribute("data-hrange")) : null;
+    if (start === hoveredHrange) return;
+    hoveredHrange = start;
+    applyHoveredClass();
+    handle.onHoverChange?.(start);
+  }, { signal });
+
+  container.addEventListener("mouseleave", () => {
+    if (hoveredHrange === null) return;
+    hoveredHrange = null;
+    applyHoveredClass();
+    handle.onHoverChange?.(null);
+  }, { signal });
+
+  // ── Handle ───────────────────────────────────────────────────────────────
+  const handle: HexViewHandle = {
+    onHoverChange: null,
+
     updateColorMap(ranges: ActiveRange[]): void {
       colorMap = buildColorMap(ranges);
       mapVersion++;
       renderWindow();
     },
+
+    setHovered(start: number | null): void {
+      hoveredHrange = start;
+      applyHoveredClass();
+    },
   };
+
+  return handle;
 }

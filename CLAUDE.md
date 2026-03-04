@@ -171,8 +171,6 @@ The full UI is implemented and working:
 
 ## Next steps
 
-- **Hex ↔ legend hover sync** — hovering a legend row should highlight the matching byte range in the
-  hex view, and vice versa; greying out off-screen legend entries via IntersectionObserver
 - **Click to scroll** — clicking on a segment in the hex view should scroll to and expand the corresponding
   legend in the legend view. Clicking on a legend in the legend view should scroll the hex view to show the
   start of the same section (even if the same click expands or collapses a group)

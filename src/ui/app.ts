@@ -76,8 +76,13 @@ async function openFile(file: File): Promise<void> {
 
   titleEl.textContent = file.name;
   renderSummary(result, file);
-  const hexView = initHexView(hexPanel, hexColHeader, buffer, result, DEFAULT_OPTIONS);
-  initLegend(legendPanel, result.ranges, hexView.updateColorMap);
+  const hexView    = initHexView(hexPanel, hexColHeader, buffer, result, DEFAULT_OPTIONS);
+  const legendView = initLegend(legendPanel, result.ranges, hexView.updateColorMap);
+
+  // Cross-wire hover sync: each component calls the other's setHovered when the user
+  // interacts with it, but setHovered itself never calls onHoverChange to avoid loops.
+  hexView.onHoverChange    = legendView.setHovered.bind(legendView);
+  legendView.onHoverChange = hexView.setHovered.bind(hexView);
 }
 
 // ── Summary panel ─────────────────────────────────────────────────────────────

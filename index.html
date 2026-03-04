@@ -168,11 +168,6 @@
         line-height: 20px;
       }
 
-      /* Hover highlight — JS will toggle this class on matching data-range spans */
-      .b.hovered, .c.hovered {
-        filter: brightness(1.6);
-        outline: 1px solid rgba(255,255,255,0.25);
-      }
 
       /* ── Right column ── */
       #right-panel {
@@ -313,6 +308,25 @@
         margin-right: 3px;
         vertical-align: middle;
       }
+
+      /* ── Hover sync ── */
+
+      /* All annotated bytes are slightly dimmed by default */
+      .b[data-hrange], .c[data-hrange] { filter: brightness(0.72); }
+
+      /* Hovered bytes are brighter than the "natural" color */
+      .b.hovered, .c.hovered { filter: brightness(1.12); }
+
+      /* Swatch dots dim by default; full opacity when the row is highlighted */
+      .swatch-dot { opacity: 0.65; }
+      .legend-row.hovered .swatch-dot,
+      .legend-row:hover .swatch-dot {
+        opacity: 1;
+      }
+
+      /* Legend row highlight (driven by hex hover) */
+      .legend-row.hovered:not(.legend-group-row) { background: #2a2a2a; }
+      .legend-group-row.hovered                   { background: #313131; }
     </style>
   </head>
   <body>
