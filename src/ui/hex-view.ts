@@ -31,10 +31,18 @@ function rowHtml(
   let hexPart   = "";
   let asciiPart = "";
 
+  // Track the current colored range across columns to avoid one binary search per byte.
+  // We only re-query when the current offset exits the cached range.
+  let cr: ReturnType<typeof colorForByte> = null;
+
   for (let col = 0; col < bytesPerRow; col++) {
     const offset = rowStart + col;
     const inFile = offset < rowEnd;
-    const cr     = offset < rowEnd ? colorForByte(offset, colorMap) : null;
+    if (inFile && (!cr || offset >= cr.end)) {
+      cr = colorForByte(offset, colorMap);
+    } else if (!inFile) {
+      cr = null;
+    }
     const rAttr  = cr ? ` data-byteoffset="${cr.start}"` : "";
     const midCls = col === half - 1 ? " mid" : "";
 

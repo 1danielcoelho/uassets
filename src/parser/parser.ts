@@ -26,7 +26,7 @@ import {
   UE5_SCRIPT_SERIALIZATION_OFFSET,
   PKG_FILTER_EDITOR_ONLY,
 } from "./summary.ts";
-import type { FObjectImport, FObjectExport } from "./types.ts";
+import type { FGuid, FObjectImport, FObjectExport } from "./types.ts";
 import { resolveName, resolveClass } from "./utils.ts";
 import { dispatchExport } from "./dispatch.ts";
 import { parseTaggedProperties } from "./tagged-properties.ts";
@@ -169,7 +169,7 @@ function parseExportsTable(
         const notForServer = r.readInt32() !== 0;
 
         // PackageGuid removed in UE5 >= 1005, but PackageFlags is ALWAYS present
-        let packageGuid = undefined as any;
+        let packageGuid: FGuid | undefined;
         if (h.fileVersionUE5 < UE5_REMOVE_OBJECT_EXPORT_PACKAGE_GUID) {
           packageGuid = r.readFGuid();
         }
@@ -411,6 +411,10 @@ function parseOpaqueBlobs(
   h: PackageFileSummaryData,
   names: string[],
 ): void {
+  // IMPORTANT: Every section offset field from PackageFileSummaryData must be listed here.
+  // blobSize() finds a section's size by scanning for the next known offset — if a new
+  // section is added to the header but its offset is omitted here, it will silently
+  // over-read into the following section.
   const allSectionOffsets = [
     h.nameOffset, h.softObjectPathsOffset, h.gatherableTextDataOffset,
     h.importOffset, h.exportOffset, h.cellExportOffset, h.cellImportOffset,
@@ -651,6 +655,8 @@ function parseGenericExport(
   names: string[],
   fileVersionUE5: number,
 ): void {
+  // NOTE: Number() conversion is safe for files up to ~2 GB (JS number has 53-bit mantissa).
+  // The browser's ArrayBuffer limit is also <2 GB, so this is not a practical concern.
   const offset      = Number(exp.serialOffset);
   const size        = Number(exp.serialSize);
   const scriptStart = Number(exp.scriptSerializationStartOffset);
@@ -685,24 +691,24 @@ function parseGenericExport(
 export function parseUAsset(buffer: ArrayBuffer): ParseResult {
   const r = new BinaryReader(buffer);
 
-  // Phase 1: Fixed header
+  // Step 1: Fixed header
   const h = r.group("Package Header", () => parsePackageFileSummary(r));
 
-  // Phase 2: Index tables
+  // Step 2: Core index tables
   const names   = parseNamesTable(r, h);
   const imports = parseImportsTable(r, h, names);
   const exports = parseExportsTable(r, h, names);
 
-  // Phase 2.5: Remaining index tables
+  // Step 3: Remaining index tables
   const softObjectPaths = parseIndexTables(r, h, names, imports, exports);
 
-  // Phase 2.9: Opaque and structured blob sections
+  // Step 4: Opaque and structured blob sections
   parseOpaqueBlobs(r, h, names);
 
-  // Phase 2.95: Metadata (after opaque blobs; needs softObjectPaths)
+  // Step 5: Metadata (after opaque blobs; needs softObjectPaths)
   const metadataCount = parseMetadata(r, h, names, softObjectPaths);
 
-  // Phase 3: Export data — all exports under one "Exports" group
+  // Step 6: Export data — all exports under one "Exports" group
   const firstExportOffset = exports
     .map(e => Number(e.serialOffset))
     .filter(o => o > 0)

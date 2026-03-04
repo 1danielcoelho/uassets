@@ -64,22 +64,6 @@ export interface AssetSummary {
   }>;
 }
 
-// ─── Display segment ─────────────────────────────────────────────────────────
-
-/** A row segment in the hex viewer. Either a block of concrete hex rows, or a
- *  collapsed ellipsis representing a large run of bytes. */
-export type DisplaySegment =
-  | { type: "rows";     startByte: number; endByte: number }
-  | { type: "ellipsis"; startByte: number; endByte: number; label: string };
-
-// ─── Viewer state ────────────────────────────────────────────────────────────
-
-export interface ViewerState {
-  scrollTop: number;
-  /** The range currently hovered in the hex view or legend. */
-  hoveredRange: ByteRange | null;
-}
-
 // ─── Options ─────────────────────────────────────────────────────────────────
 
 export interface Options {

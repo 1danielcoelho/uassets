@@ -20,6 +20,9 @@ import type {
  * Use `group(label, fn)` to wrap a block of reads under a single parent
  * annotation whose children are all the labeled reads performed inside `fn`.
  */
+const utf8Decoder  = new TextDecoder("utf-8");
+const utf16Decoder = new TextDecoder("utf-16le");
+
 export class BinaryReader {
   private readonly view: DataView;
   private readonly bytes: Uint8Array;
@@ -154,7 +157,7 @@ export class BinaryReader {
   readBytes(n: number, label?: string): Uint8Array {
     const start = this.pos;
     this.assertBounds(n, label);
-    const value = this.bytes.slice(this.pos, this.pos + n);
+    const value = this.bytes.subarray(this.pos, this.pos + n);
     this.pos += n;
     if (label !== undefined) this._annotations.push({ kind: "bytes", start, end: this.pos, label, value });
     return value;
@@ -183,14 +186,14 @@ export class BinaryReader {
     } else if (len > 0) {
       const bytes = this.readBytes(len);
       const end = bytes[len - 1] === 0 ? len - 1 : len;
-      value = new TextDecoder("utf-8").decode(bytes.subarray(0, end));
+      value = utf8Decoder.decode(bytes.subarray(0, end));
     } else {
       const charCount = -len;
       const bytes = this.readBytes(charCount * 2);
       const end = (bytes[charCount * 2 - 1] === 0 && bytes[charCount * 2 - 2] === 0)
         ? (charCount - 1) * 2
         : charCount * 2;
-      value = new TextDecoder("utf-16le").decode(bytes.subarray(0, end));
+      value = utf16Decoder.decode(bytes.subarray(0, end));
     }
     if (label !== undefined) this._annotations.push({ kind: "string", start, end: this.pos, label, value });
     return value;

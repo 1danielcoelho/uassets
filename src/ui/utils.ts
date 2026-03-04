@@ -82,12 +82,12 @@ export interface HexViewHandle extends ViewerHandle {
 
 // ── Formatters ────────────────────────────────────────────────────────────────
 
-/** SI-prefixed byte count. Append "B" at call site for full units (e.g. "4.2 M" + "B" → "4.2 MB"). */
+/** SI-prefixed byte count with unit suffix (e.g. "42 B", "4.2 KB", "4.2 MB"). */
 export function formatSize(n: number): string {
-  if (n < 1_000) return `${n}`;
-  if (n < 1_000_000) return `${(n / 1_000).toFixed(1)} K`;
-  if (n < 1_000_000_000) return `${(n / 1_000_000).toFixed(1)} M`;
-  return `${(n / 1_000_000_000).toFixed(2)} G`;
+  if (n < 1_000) return `${n} B`;
+  if (n < 1_000_000) return `${(n / 1_000).toFixed(1)} KB`;
+  if (n < 1_000_000_000) return `${(n / 1_000_000).toFixed(1)} MB`;
+  return `${(n / 1_000_000_000).toFixed(2)} GB`;
 }
 
 /** Escape HTML special characters for safe insertion into HTML. */

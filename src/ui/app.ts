@@ -97,7 +97,7 @@ function renderSummary(result: ParseResult, file: File): void {
 
   summaryPanel.innerHTML = [
     `<div class="asset-class">${escHtml(file.name)}</div>`,
-    metaLine("File size",       formatSize(totalBytes) + (totalBytes < 1_000 ? " B" : "B")),
+    metaLine("File size",       formatSize(totalBytes)),
     modifiedLine,
     metaLine("Content path",    path),
     metaLine("Engine version",  summary.engineVersion || "—"),
@@ -114,7 +114,9 @@ function metaLine(label: string, value: string): string {
 
 // ── Dev: auto-load test asset ─────────────────────────────────────────────────
 
-fetch("/test/assets/5_7_3/SM_cube.uasset")
-  .then(r => r.ok ? r.arrayBuffer() : Promise.reject())
-  .then(buf => openFile(new File([buf], "SM_cube.uasset")))
-  .catch(() => { /* not in dev, or file missing — silently skip */ });
+if (location.hostname === "localhost" || location.hostname === "127.0.0.1") {
+  fetch("/test/assets/5_7_3/SM_cube.uasset")
+    .then(r => r.ok ? r.arrayBuffer() : Promise.reject())
+    .then(buf => openFile(new File([buf], "SM_cube.uasset")))
+    .catch(() => { /* file missing — silently skip */ });
+}

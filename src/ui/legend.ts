@@ -129,6 +129,7 @@ export function initLegend(
   table.addEventListener("mouseleave", () => {
     if (lastHoveredStart === null) return;
     lastHoveredStart = null;
+    lastHoveredEnd   = null;
     handle.onHoverChange?.(null);
   });
 
@@ -146,8 +147,7 @@ function buildRows(
   rowMap: Map<number, HTMLTableRowElement[]>,
   rangeToRowInfo: Map<ByteRange, RowInfo>,
 ): HTMLTableRowElement[] {
-  const isGroup     = range.kind === "group";
-  const hasChildren = isGroup && (range as Extract<ByteRange, { kind: "group" }>).children.length > 0;
+  const hasChildren = range.kind === "group" && range.children.length > 0;
 
   const tr = document.createElement("tr");
   tr.className = hasChildren ? "legend-row legend-group-row" : "legend-row";
@@ -197,8 +197,8 @@ function buildRows(
   const result: HTMLTableRowElement[] = [tr];
 
   // ── Children ──
-  if (hasChildren) {
-    const children = (range as Extract<ByteRange, { kind: "group" }>).children;
+  if (hasChildren && range.kind === "group") {
+    const children = range.children;
     const allDescendantRows: HTMLTableRowElement[] = [];
     const directChildRows:   HTMLTableRowElement[] = [];
 
