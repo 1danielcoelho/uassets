@@ -44,8 +44,10 @@ export function initLegend(
     ? () => onColorMapChange(buildActiveRanges(ranges, expandedRanges))
     : () => {};
 
-  // ── Row map (start offset → <tr>) for hover sync ──
-  const rowMap = new Map<number, HTMLTableRowElement>();
+  // ── Row map (start offset → <tr>[]) for hover sync ──
+  // Multiple rows can share the same start offset (e.g. a group and its first child);
+  // setHovered picks the first visible one.
+  const rowMap = new Map<number, HTMLTableRowElement[]>();
 
   // ── Rows ──
   const tbody = table.createTBody();
@@ -66,7 +68,10 @@ export function initLegend(
         hoveredRow = null;
       }
       if (start !== null) {
-        const row = rowMap.get(start);
+        const rows = rowMap.get(start);
+        // Pick the first visible row (groups and their first child share a start offset;
+        // only the currently-relevant one will be visible).
+        const row = rows?.find(r => r.style.display !== "none") ?? null;
         if (row) {
           row.classList.add("hovered");
           hoveredRow = row;
@@ -124,7 +129,7 @@ function buildRows(
   depth: number,
   expandedRanges: Set<ByteRange>,
   notifyChange: () => void,
-  rowMap: Map<number, HTMLTableRowElement>,
+  rowMap: Map<number, HTMLTableRowElement[]>,
 ): HTMLTableRowElement[] {
   const isGroup     = range.kind === "group";
   const hasChildren = isGroup && (range as Extract<ByteRange, { kind: "group" }>).children.length > 0;
@@ -132,7 +137,9 @@ function buildRows(
   const tr = document.createElement("tr");
   tr.className = hasChildren ? "legend-row legend-group-row" : "legend-row";
   tr.setAttribute("data-hrange", String(range.start));
-  rowMap.set(range.start, tr);
+  const existing = rowMap.get(range.start);
+  if (existing) existing.push(tr);
+  else rowMap.set(range.start, [tr]);
 
   // ── Swatch — all rows get their own color ──
   const swatchTd = document.createElement("td");

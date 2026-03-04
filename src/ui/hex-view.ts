@@ -65,24 +65,58 @@ function rowHtml(
   const addr     = "0x" + rowStart.toString(16).padStart(8, "0");
   const half     = bytesPerRow >>> 1;
 
+  // Pre-compute which range covers each column so we can check neighbors cheaply.
+  const rowCrs: (ColoredRange | null)[] = new Array(bytesPerRow);
+  for (let c = 0; c < bytesPerRow; c++) {
+    const off = rowStart + c;
+    rowCrs[c] = off < rowEnd ? colorForByte(off, colorMap) : null;
+  }
+
   let hexPart   = "";
   let asciiPart = "";
 
   for (let col = 0; col < bytesPerRow; col++) {
-    const offset  = rowStart + col;
-    const inFile  = offset < rowEnd;
-    const cr      = inFile ? colorForByte(offset, colorMap) : null;
-    const bgStyle = cr ? ` style="background:${cr.color}"` : "";
-    // data-range = color map index (for future hover-by-idx); data-hrange = stable start offset
-    const rAttr   = cr ? ` data-range="${cr.idx}" data-hrange="${cr.start}"` : "";
-    const midCls  = col === half - 1 ? " mid" : "";
+    const offset = rowStart + col;
+    const inFile = offset < rowEnd;
+    const cr     = rowCrs[col] ?? null;
+    const rAttr  = cr ? ` data-range="${cr.idx}" data-hrange="${cr.start}"` : "";
+    const midCls = col === half - 1 ? " mid" : "";
 
     if (inFile) {
       const byte = bytes[offset]!;
       const hex  = byte.toString(16).padStart(2, "0").toUpperCase();
       const chr  = (byte >= 32 && byte < 127) ? escChr(String.fromCharCode(byte)) : "·";
-      hexPart   += `<span class="b${midCls}"${rAttr}${bgStyle}>${hex}</span>`;
-      asciiPart += `<span class="c"${rAttr}${bgStyle}>${chr}</span>`;
+
+      if (cr) {
+        const prevCr = rowCrs[col - 1] ?? null;
+        const nextCr = rowCrs[col + 1] ?? null;
+        const prevSame = prevCr?.start === cr.start;
+        // The mid-gap (.b.mid has extra margin-right) is a visual break even within
+        // the same annotation; treat the byte before it as a run end.
+        const nextSame = nextCr?.start === cr.start && col !== half - 1;
+
+        // Apply border-radius only on the "open" (non-connecting) ends of the run.
+        // Where the same annotation continues, keep the edge flat so the block looks solid.
+        const lR = prevSame ? 0 : 2;
+        const rR = nextSame ? 0 : 2;
+        const hexRadius = lR === rR ? `${lR}px` : `${lR}px ${rR}px ${rR}px ${lR}px`;
+        // Fill the 2px flex gap only when the immediately next byte is the same annotation.
+        const hexShadow = nextSame ? `;box-shadow:2px 0 0 ${cr.color}` : "";
+        const hexBg = ` style="background:${cr.color};border-radius:${hexRadius}${hexShadow}"`;
+
+        // ASCII has no flex gap so no shadow; apply the same rounding logic independently
+        // (no mid-gap concept in ASCII — bytes are always packed tightly).
+        const lA = prevSame ? 0 : 1;
+        const rA = nextCr?.start === cr.start ? 0 : 1;
+        const asciiRadius = lA === rA ? `${lA}px` : `${lA}px ${rA}px ${rA}px ${lA}px`;
+        const asciiBg = ` style="background:${cr.color};border-radius:${asciiRadius}"`;
+
+        hexPart   += `<span class="b${midCls}"${rAttr}${hexBg}>${hex}</span>`;
+        asciiPart += `<span class="c"${rAttr}${asciiBg}>${chr}</span>`;
+      } else {
+        hexPart   += `<span class="b${midCls}"${rAttr}>${hex}</span>`;
+        asciiPart += `<span class="c"${rAttr}>${chr}</span>`;
+      }
     } else {
       hexPart   += `<span class="b${midCls}">  </span>`;
       asciiPart += `<span class="c"> </span>`;
@@ -182,8 +216,25 @@ export function initHexView(
 
   // ── Hover event handlers ─────────────────────────────────────────────────
   container.addEventListener("mouseover", (e) => {
-    const el    = (e.target as HTMLElement).closest<HTMLElement>("[data-hrange]");
-    const start = el ? Number(el.getAttribute("data-hrange")) : null;
+    const target = e.target as HTMLElement;
+    let start: number | null;
+
+    if (target.classList.contains("b") || target.classList.contains("c")) {
+      // Actual byte / ASCII cell — read its annotation (or clear if unannotated)
+      start = target.hasAttribute("data-hrange")
+        ? Number(target.getAttribute("data-hrange"))
+        : null;
+    } else if (
+      target === container || target === spacer || target === rowsEl ||
+      target.classList.contains("hex-row") || target.classList.contains("addr")
+    ) {
+      // Clearly "background" (between rows, address column, outer padding) — clear
+      start = null;
+    } else {
+      // Inter-byte flex gaps (.bytes / .ascii containers) — ignore, keep current
+      return;
+    }
+
     if (start === hoveredHrange) return;
     hoveredHrange = start;
     applyHoveredClass();
