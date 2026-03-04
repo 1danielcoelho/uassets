@@ -158,33 +158,8 @@ The parser is fully refactored and all 6 test assets pass (6/6).
 - PackageTrailer (FHeader + FLookupTableEntry × N + payload blobs + FFooter)
 - Exports group → per-export group → Properties group → per-property group + Export Tail
 
-## State of UI
-
-The full UI is implemented and working:
-- **`src/ui/app.ts`** — file open/drop, summary panel, dev auto-load of SM_cube.uasset
-- **`src/ui/hex-view.ts`** — virtual-scrolling hex viewer; `BYTES_PER_ROW = 16`; byte cells colored
-  by top-level annotation range; `AbortController` cleans up on new file
-- **`src/ui/legend.ts`** — legend table with swatch/bytes/name/value columns; collapsible groups;
-  DOM-derived expand state (immune to parent-collapse/re-expand stale state bug); `table-layout: fixed`
-- **`index.html`** — full layout: menu bar, hex-column (header + panel), right-panel (summary + legend)
-- **`dev.ts`** — Bun HTTP dev server with SSE live-reload
-
 ## Next steps
 
-- **Cleanup and minor tweaks**:
-   - It shows the name of the opened file next to the File button on the menu bar. I don't like that: Remove it
-     from there, however on the summary panel do display the filename like that as well. It would be good if you
-     could display any additional information you can get from the file generically (maybe last modified date,
-     things like that. Not sure if possible when uploading a file like this)
-   - `formatBytes` is using 1024 for kilo, and 1024 * 1024 for mega, etc. I want it to use 1000 for kilo, 1 million
-     for mega, etc. (as those are SI prefixes)
-   - Move the stuff in `colors.ts` and `formatBytes`, `escHtml` from app.ts to a new `utils.ts` file in the `ui` folder. Move `colorForByte` and `escChr`, `valueStr`, `formatSize` (another copy of `formatBytes`?) there as well, and any other of these simple utils functions to their respective utils files
-   - Actually, maybe `escChr` and `escHtml` can be combined somehow?
-   - Remove `ActiveRange`, and just use `ColoredRange` everywhere
-   - in `initHexView` the function `applyHoveredClass` is spammed on mouse events, and does two big queries... Can you optimize this a bit? For example you can just track the last elements you added hovered to, and on the next call use those references to remove the hovered class
-   - There are some `// TODO:` comments in the code mentioning other things that need cleanup
-   - There are a couple errors on hex-view.ts within `applyHoveredClass` saying `Type 'NodeListOf<HTMLElement>' must have a '[Symbol.iterator]()' method that returns an iterator.ts(2488)`
-   - `HexViewHandle` and `LegendHandle` are very similar.. can they be combined and reused?
 - **Click to expand** — clicking on a group annotation on the hex view should also expand the group on the legend
   view, which should in turn cause the group to be broken up into the coloring the individual child annotations.
   You should be able to progressively click on nested to "step into them" in that way, as if you're expanding

@@ -591,9 +591,10 @@ function parseMetadata(
   h: PackageFileSummaryData,
   names: string[],
   softObjectPaths: string[],
-): void {
-  if (h.metadataOffset <= 0) return;
+): number {
+  if (h.metadataOffset <= 0) return 0;
 
+  let total = 0;
   r.seek(h.metadataOffset);
   r.group("Metadata", () => {
     // Format:
@@ -606,11 +607,13 @@ function parseMetadata(
     // Soft Object Paths table in the header (see FLinkerLoad::operator<< FSoftObjectPath).
     const numObjectMeta = r.readInt32("Num Object Metadata Entries");
     const numRootMeta   = r.readInt32("Num Root Metadata Entries");
+    total += numRootMeta; // each root meta entry is itself one tag
     for (let i = 0; i < numObjectMeta; i++) {
       r.group(`ObjectMeta[${i}]`, () => {
         const pathIdx = r.readInt32("Soft Object Path Index");
         const path    = softObjectPaths[pathIdx] ?? `<softpath#${pathIdx}>`;
         const mapCount = r.readInt32("Tag Count");
+        total += mapCount;
         for (let j = 0; j < mapCount; j++) {
           r.group(`Tag[${j}]`, () => {
             const keyIdx = r.readInt32("Key Index");
@@ -631,6 +634,7 @@ function parseMetadata(
       });
     }
   });
+  return total;
 }
 
 // ── Generic export data ───────────────────────────────────────────────────────
@@ -696,7 +700,7 @@ export function parseUAsset(buffer: ArrayBuffer): ParseResult {
   parseOpaqueBlobs(r, h, names);
 
   // Phase 2.95: Metadata (after opaque blobs; needs softObjectPaths)
-  parseMetadata(r, h, names, softObjectPaths);
+  const metadataCount = parseMetadata(r, h, names, softObjectPaths);
 
   // Phase 3: Export data — all exports under one "Exports" group
   const firstExportOffset = exports
@@ -742,6 +746,7 @@ export function parseUAsset(buffer: ArrayBuffer): ParseResult {
     customVersions: h.customVersions,
     properties: [],
     nameCount: names.length,
+    metadataCount,
     exports: exports.map((exp, i) => ({
       index: i,
       objectName: resolveName(names, exp.objectName),

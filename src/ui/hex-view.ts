@@ -1,56 +1,21 @@
-import type { ParseResult, Options } from "../types.ts";
-import { colorForLabel, type ActiveRange } from "./colors.ts";
+import type { ParseResult, Options, ByteRange } from "../types.ts";
+import {
+  colorForByte, escHtml, buildActiveRanges,
+  type ColoredRange, type HexViewHandle,
+} from "./utils.ts";
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
 export const ROW_HEIGHT = 20; // px — must match .hex-row height in CSS
 const OVERSCAN = 30;          // extra rows rendered above/below the viewport
 
-// ── Types ─────────────────────────────────────────────────────────────────────
-
-interface ColoredRange {
-  start: number;
-  end: number;
-  color: string;
-}
-
-export interface HexViewHandle {
-  updateColorMap(ranges: ActiveRange[]): void;
-  setHovered(start: number | null): void;
-  onHoverChange: ((start: number | null) => void) | null;
-}
-
-// ── Color map ─────────────────────────────────────────────────────────────────
-
-function buildColorMap(ranges: ActiveRange[]): ColoredRange[] {
-  return ranges.map((r, i) => ({
-    start: r.start,
-    end:   r.end,
-    color: colorForLabel(r.label),
-  }));
-}
-
-/** Binary search: find the colored range containing `offset`, or null. */
-function colorForByte(offset: number, map: ColoredRange[]): ColoredRange | null {
-  let lo = 0, hi = map.length - 1;
-  while (lo <= hi) {
-    const mid = (lo + hi) >> 1;
-    const r = map[mid]!;
-    if      (offset < r.start) hi = mid - 1;
-    else if (offset >= r.end)  lo = mid + 1;
-    else return r;
-  }
-  return null;
-}
+const BYTE_CELL_W  = 19;  // px — must match .b width in CSS
+const BYTE_GAP_W   = 2;   // px — gap in .bytes flex container
+const MID_GAP_W    = 6;   // px — extra gap after 8th byte (.b.mid margin-right)
+const ASCII_CELL_W = 8;   // px — must match .c width in CSS
+const ADDR_COL_W   = 82;  // px — must match .addr width in CSS
 
 // ── Row HTML builder ──────────────────────────────────────────────────────────
-
-function escChr(chr: string): string {
-  if (chr === "&") return "&amp;";
-  if (chr === "<") return "&lt;";
-  if (chr === ">") return "&gt;";
-  return chr;
-}
 
 function rowHtml(
   rowIndex: number,
@@ -76,7 +41,7 @@ function rowHtml(
     if (inFile) {
       const byte = bytes[offset]!;
       const hex  = byte.toString(16).padStart(2, "0").toUpperCase();
-      const chr  = (byte >= 32 && byte < 127) ? escChr(String.fromCharCode(byte)) : "·";
+      const chr  = (byte >= 32 && byte < 127) ? escHtml(String.fromCharCode(byte)) : "·";
 
       if (cr) {
         const hexShadow = `;box-shadow:2px 0 0 ${cr.color}`;
@@ -120,18 +85,16 @@ export function initHexView(
   const { signal } = currentAbort;
 
   const fileBytesArray = new Uint8Array(fileBytes);
-  let colorMap = buildColorMap(parsedAsset.ranges.map(r => ({ start: r.start, end: r.end, label: r.label })));
+  let colorMap: ColoredRange[] = buildActiveRanges(parsedAsset.ranges, new Set<ByteRange>());
   const bytesPerRow = options.bytesPerRow;
   const totalRows = Math.ceil(parsedAsset.totalBytes / bytesPerRow);
   const totalHeight = totalRows * ROW_HEIGHT;
 
   // ── Column header ─────────────────────────────────────────────────────────
-  // TODO: What are these magic numbers here? If they are constants, hoist them to the top of the file
-  // maybe these could even be Options, so that we could configure the layout a bit? (just guessing)
-  const bytesColWidth = bytesPerRow * 19 + (bytesPerRow - 1) * 2 + 6;
-  const asciiColWidth = bytesPerRow * 8;
+  const bytesColWidth = bytesPerRow * BYTE_CELL_W + (bytesPerRow - 1) * BYTE_GAP_W + MID_GAP_W;
+  const asciiColWidth = bytesPerRow * ASCII_CELL_W;
   headerEl.innerHTML =
-    `<span style="width:82px">Address</span>` +
+    `<span style="width:${ADDR_COL_W}px">Address</span>` +
     `<span style="width:${bytesColWidth}px">Bytes (raw)</span>` +
     `<span style="width:${asciiColWidth}px">Bytes (ASCII)</span>`;
 
@@ -148,15 +111,16 @@ export function initHexView(
 
   // ── Hover state ──────────────────────────────────────────────────────────
   let hoveredByteOffset: number | null = null;
+  let lastHoveredEls: HTMLElement[] = [];
 
   function applyHoveredClass(): void {
-    for (const el of rowsEl.querySelectorAll<HTMLElement>(".hovered")) {
-      el.classList.remove("hovered");
-    }
+    for (const el of lastHoveredEls) el.classList.remove("hovered");
+    lastHoveredEls = [];
     if (hoveredByteOffset !== null) {
-      for (const el of rowsEl.querySelectorAll<HTMLElement>(`[data-byteoffset="${hoveredByteOffset}"]`)) {
-        el.classList.add("hovered");
-      }
+      lastHoveredEls = Array.from(
+        rowsEl.querySelectorAll<HTMLElement>(`[data-byteoffset="${hoveredByteOffset}"]`)
+      );
+      for (const el of lastHoveredEls) el.classList.add("hovered");
     }
   }
 
@@ -182,6 +146,7 @@ export function initHexView(
       html += rowHtml(r, fileBytesArray, colorMap, bytesPerRow);
     }
     rowsEl.innerHTML = html;
+    lastHoveredEls = []; // stale refs after DOM rebuild
     applyHoveredClass();
   }
 
@@ -226,8 +191,8 @@ export function initHexView(
   const handle: HexViewHandle = {
     onHoverChange: null,
 
-    updateColorMap(ranges: ActiveRange[]): void {
-      colorMap = buildColorMap(ranges);
+    updateColorMap(ranges: ColoredRange[]): void {
+      colorMap = ranges;
       mapVersion++;
       renderWindow();
     },

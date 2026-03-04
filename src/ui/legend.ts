@@ -1,20 +1,20 @@
 import type { ByteRange } from "../types.ts";
-import { fGuidToString } from "../parser/utils.ts";
-import { colorForLabel, type ActiveRange } from "./colors.ts";
+import {
+  colorForLabel, buildActiveRanges, removeDescendantsFromExpanded,
+  formatSize, valueStr,
+  type ColoredRange, type ViewerHandle,
+} from "./utils.ts";
 
 // ── Public types ──────────────────────────────────────────────────────────────
 
-export interface LegendHandle {
-  setHovered(start: number | null): void;
-  onHoverChange: ((start: number | null) => void) | null;
-}
+export type LegendHandle = ViewerHandle;
 
 // ── Public API ────────────────────────────────────────────────────────────────
 
 export function initLegend(
   container: HTMLElement,
   ranges: ByteRange[],
-  onColorMapChange?: (ranges: ActiveRange[]) => void,
+  onColorMapChange?: (ranges: ColoredRange[]) => void,
 ): LegendHandle {
   container.innerHTML = "";
   const table = document.createElement("table");
@@ -60,6 +60,7 @@ export function initLegend(
   let lastHoveredStart: number | null = null;
 
   const handle: LegendHandle = {
+    // This receives the hex view's setHovered
     onHoverChange: null,
 
     setHovered(start: number | null): void {
@@ -96,29 +97,6 @@ export function initLegend(
   });
 
   return handle;
-}
-
-// ── Active range computation ───────────────────────────────────────────────────
-
-function buildActiveRanges(ranges: ByteRange[], expandedRanges: Set<ByteRange>): ActiveRange[] {
-  const result: ActiveRange[] = [];
-  for (const range of ranges) {
-    if (range.kind === "group" && range.children.length > 0 && expandedRanges.has(range)) {
-      result.push(...buildActiveRanges(range.children, expandedRanges));
-    } else {
-      result.push({ start: range.start, end: range.end, label: range.label });
-    }
-  }
-  return result;
-}
-
-function removeDescendantsFromExpanded(range: ByteRange, expandedRanges: Set<ByteRange>): void {
-  expandedRanges.delete(range);
-  if (range.kind === "group") {
-    for (const child of range.children) {
-      removeDescendantsFromExpanded(child, expandedRanges);
-    }
-  }
 }
 
 // ── Row builder ───────────────────────────────────────────────────────────────
@@ -218,38 +196,4 @@ function buildRows(
   }
 
   return result;
-}
-
-// ── Formatters ────────────────────────────────────────────────────────────────
-
-function valueStr(range: ByteRange): string {
-  switch (range.kind) {
-    case "int8":  case "int16":  case "int32":
-    case "uint8": case "uint16": case "uint32":
-    case "float32": case "float64":
-      return range.value.toString();
-    case "int64": case "uint64":
-      return range.value.toString();
-    case "bytes": {
-      const preview = Array.from(range.value.slice(0, 8))
-        .map(b => b.toString(16).padStart(2, "0"))
-        .join(" ");
-      return range.value.length > 8 ? preview + " …" : preview;
-    }
-    case "string":
-      return range.value.length > 48 ? range.value.slice(0, 47) + "…" : range.value;
-    case "guid":
-      return fGuidToString(range.value);
-    case "group":
-      return typeof range.value === "string"
-        ? (range.value.length > 48 ? range.value.slice(0, 47) + "…" : range.value)
-        : "";
-  }
-}
-
-function formatSize(n: number): string {
-  if (n < 1024) return `${n}`;
-  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} K`;
-  if (n < 1024 * 1024 * 1024) return `${(n / (1024 * 1024)).toFixed(1)} M`;
-  return `${(n / (1024 * 1024 * 1024)).toFixed(2)} G`;
 }
