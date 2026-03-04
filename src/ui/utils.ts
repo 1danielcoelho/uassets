@@ -65,9 +65,14 @@ export function removeDescendantsFromExpanded(range: ByteRange, expandedRanges: 
 
 // ── Shared handle types ────────────────────────────────────────────────────────
 
+export interface HoverRange {
+  start: number;
+  end: number;
+}
+
 export interface ViewerHandle {
-  setHovered(start: number | null): void;
-  onHoverChange: ((start: number | null) => void) | null;
+  setHovered(range: HoverRange | null): void;
+  onHoverChange: ((range: HoverRange | null) => void) | null;
 }
 
 export interface HexViewHandle extends ViewerHandle {

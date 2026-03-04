@@ -2,7 +2,7 @@ import type { ByteRange } from "../types.ts";
 import {
   colorForLabel, buildActiveRanges, removeDescendantsFromExpanded,
   formatSize, valueStr,
-  type ColoredRange, type ViewerHandle,
+  type ColoredRange, type ViewerHandle, type HoverRange,
 } from "./utils.ts";
 
 // ── Public types ──────────────────────────────────────────────────────────────
@@ -71,18 +71,19 @@ export function initLegend(
   // ── Hover state ──
   let hoveredRow: HTMLTableRowElement | null = null;
   let lastHoveredStart: number | null = null;
+  let lastHoveredEnd:   number | null = null;
 
   const handle: LegendHandle = {
     // This receives the hex view's setHovered
     onHoverChange: null,
 
-    setHovered(start: number | null): void {
+    setHovered(range: HoverRange | null): void {
       if (hoveredRow) {
         hoveredRow.classList.remove("hovered");
         hoveredRow = null;
       }
-      if (start !== null) {
-        const rows = rowMap.get(start);
+      if (range !== null) {
+        const rows = rowMap.get(range.start);
         // Pick the first visible row (groups and their first child share a start offset;
         // only the currently-relevant one will be visible).
         const row = rows?.find(r => r.style.display !== "none") ?? null;
@@ -112,9 +113,17 @@ export function initLegend(
   table.addEventListener("mouseover", (e) => {
     const tr    = (e.target as HTMLElement).closest<HTMLTableRowElement>("tr[data-byteoffset]");
     const start = tr ? Number(tr.getAttribute("data-byteoffset")) : null;
-    if (start === lastHoveredStart) return;
+    const end   = tr ? Number(tr.getAttribute("data-rangeend"))   : null;
+    // Deduplicate on both start AND end: the group row and its first child share
+    // the same start offset but have different end offsets, so we must distinguish them.
+    if (start === lastHoveredStart && end === lastHoveredEnd) return;
     lastHoveredStart = start;
-    handle.onHoverChange?.(start);
+    lastHoveredEnd   = end;
+    if (start !== null && end !== null) {
+      handle.onHoverChange?.({ start, end });
+    } else {
+      handle.onHoverChange?.(null);
+    }
   });
 
   table.addEventListener("mouseleave", () => {
@@ -143,6 +152,7 @@ function buildRows(
   const tr = document.createElement("tr");
   tr.className = hasChildren ? "legend-row legend-group-row" : "legend-row";
   tr.setAttribute("data-byteoffset", String(range.start));
+  tr.setAttribute("data-rangeend",   String(range.end));
   const existing = rowMap.get(range.start);
   if (existing) existing.push(tr);
   else rowMap.set(range.start, [tr]);

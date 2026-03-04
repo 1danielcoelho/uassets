@@ -1,7 +1,7 @@
 import type { ParseResult, Options, ByteRange } from "../types.ts";
 import {
   colorForByte, escHtml, buildActiveRanges,
-  type ColoredRange, type HexViewHandle,
+  type ColoredRange, type HexViewHandle, type HoverRange,
 } from "./utils.ts";
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -110,16 +110,24 @@ export function initHexView(
   spacer.appendChild(rowsEl);
 
   // ── Hover state ──────────────────────────────────────────────────────────
-  let hoveredByteOffset: number | null = null;
+  let hoveredRange: HoverRange | null = null;
   let lastHoveredEls: HTMLElement[] = [];
 
   function applyHoveredClass(): void {
     for (const el of lastHoveredEls) el.classList.remove("hovered");
     lastHoveredEls = [];
-    if (hoveredByteOffset !== null) {
-      lastHoveredEls = Array.from(
-        rowsEl.querySelectorAll<HTMLElement>(`[data-byteoffset="${hoveredByteOffset}"]`)
-      );
+    if (hoveredRange !== null) {
+      const { start, end } = hoveredRange;
+      // Collect all colorMap entries that overlap [start, end) — this covers
+      // both single ranges and groups whose children share the same overall span.
+      for (const cr of colorMap) {
+        if (cr.start >= end) break;
+        if (cr.end > start) {
+          lastHoveredEls.push(
+            ...Array.from(rowsEl.querySelectorAll<HTMLElement>(`[data-byteoffset="${cr.start}"]`))
+          );
+        }
+      }
       for (const el of lastHoveredEls) el.classList.add("hovered");
     }
   }
@@ -156,33 +164,30 @@ export function initHexView(
   // ── Hover event handlers ─────────────────────────────────────────────────
   container.addEventListener("mouseover", (e) => {
     const target = e.target as HTMLElement;
-    let offset: number | null;
+    let offsetStr: string | null;
 
     if (target.classList.contains("b") || target.classList.contains("c")) {
-      // Actual byte / ASCII cell — read its annotation (or clear if unannotated)
-      offset = target.hasAttribute("data-byteoffset")
-        ? Number(target.getAttribute("data-byteoffset"))
-        : null;
+      offsetStr = target.getAttribute("data-byteoffset");
     } else if (
       target === container || target === spacer || target === rowsEl ||
       target.classList.contains("hex-row") || target.classList.contains("addr")
     ) {
-      // Clearly "background" (between rows, address column, outer padding) — clear
-      offset = null;
+      offsetStr = null;
     } else {
-      // Inter-byte flex gaps (.bytes / .ascii containers) — ignore, keep current
-      return;
+      return; // inter-byte gap — keep current
     }
 
-    if (offset === hoveredByteOffset) return;
-    hoveredByteOffset = offset;
+    const cr = offsetStr !== null ? colorForByte(Number(offsetStr), colorMap) : null;
+    const newRange = cr ? { start: cr.start, end: cr.end } : null;
+    if (newRange?.start === hoveredRange?.start) return;
+    hoveredRange = newRange;
     applyHoveredClass();
-    handle.onHoverChange?.(offset);
+    handle.onHoverChange?.(hoveredRange);
   }, { signal });
 
   container.addEventListener("mouseleave", () => {
-    if (hoveredByteOffset === null) return;
-    hoveredByteOffset = null;
+    if (hoveredRange === null) return;
+    hoveredRange = null;
     applyHoveredClass();
     handle.onHoverChange?.(null);
   }, { signal });
@@ -209,8 +214,8 @@ export function initHexView(
       renderWindow();
     },
 
-    setHovered(byteOffset: number | null): void {
-      hoveredByteOffset = byteOffset;
+    setHovered(range: HoverRange | null): void {
+      hoveredRange = range;
       applyHoveredClass();
     },
   };
