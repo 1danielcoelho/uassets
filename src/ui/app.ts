@@ -80,9 +80,14 @@ async function openFile(file: File): Promise<void> {
   hexView.onHoverChange    = legendView.setHovered.bind(legendView);
   legendView.onHoverChange = hexView.setHovered.bind(hexView);
 
-  // Click-to-expand: clicking a group in the hex view expands it in the legend,
-  // which updates the color map so children's colors are visible.
-  hexView.onClickRange = legendView.expandRange.bind(legendView);
+  // Hex click → expand group in legend (if applicable) then scroll legend to that row.
+  hexView.onClickRange = (range) => {
+    legendView.expandRange(range);
+    legendView.scrollToRange(range);
+  };
+
+  // Legend click → scroll hex view to that range's start offset.
+  legendView.onClickRange = (range) => hexView.scrollToOffset(range.start);
 }
 
 // ── Summary panel ─────────────────────────────────────────────────────────────

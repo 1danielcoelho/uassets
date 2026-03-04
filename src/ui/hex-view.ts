@@ -200,14 +200,14 @@ export function initHexView(
     handle.onHoverChange?.(null);
   }, { signal });
 
-  // ── Click handler — expand group on click ─────────────────────────────────
+  // ── Click handler — notify on any annotated byte click ────────────────────
   container.addEventListener("click", (e) => {
     const target = e.target as HTMLElement;
     if (!target.classList.contains("b") && !target.classList.contains("c")) return;
     const offsetStr = target.getAttribute("data-byteoffset");
     if (offsetStr === null) return;
     const cr = colorForByte(Number(offsetStr), colorMap);
-    if (!cr || cr.range.kind !== "group") return;
+    if (!cr) return;
     handle.onClickRange?.(cr.range);
   }, { signal });
 
@@ -225,6 +225,16 @@ export function initHexView(
     setHovered(range: HoverRange | null): void {
       hoveredRange = range;
       applyHoveredClass();
+    },
+
+    scrollToOffset(offset: number): void {
+      const rowTop    = Math.floor(offset / bytesPerRow) * ROW_HEIGHT;
+      const rowBottom = rowTop + ROW_HEIGHT;
+      const viewTop    = container.scrollTop;
+      const viewBottom = viewTop + container.clientHeight;
+      if (rowTop >= viewTop && rowBottom <= viewBottom) return;
+      const centeredTop = rowTop - Math.floor((container.clientHeight - ROW_HEIGHT) / 2);
+      container.scrollTo({ top: Math.max(0, centeredTop), behavior: "smooth" });
     },
   };
 

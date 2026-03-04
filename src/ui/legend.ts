@@ -9,6 +9,8 @@ import {
 
 export interface LegendHandle extends ViewerHandle {
   expandRange(range: ByteRange): void;
+  scrollToRange(range: ByteRange): void;
+  onClickRange: ((range: ByteRange) => void) | null;
 }
 
 // ── Internal ──────────────────────────────────────────────────────────────────
@@ -62,10 +64,14 @@ export function initLegend(
   // ── Range → row info map for programmatic expansion ──
   const rangeToRowInfo = new Map<ByteRange, RowInfo>();
 
+  // ── Range ↔ row maps for click-to-scroll ──
+  const rangeToTr = new Map<ByteRange, HTMLTableRowElement>();
+  const trToRange = new Map<HTMLTableRowElement, ByteRange>();
+
   // ── Rows ──
   const tbody = table.createTBody();
   for (const range of ranges) {
-    buildRows(tbody, range, 0, expandedRanges, notifyChange, rowMap, rangeToRowInfo);
+    buildRows(tbody, range, 0, expandedRanges, notifyChange, rowMap, rangeToRowInfo, rangeToTr, trToRange);
   }
 
   // ── Hover state ──
@@ -76,6 +82,7 @@ export function initLegend(
   const handle: LegendHandle = {
     // This receives the hex view's setHovered
     onHoverChange: null,
+    onClickRange: null,
 
     setHovered(range: HoverRange | null): void {
       if (hoveredRow) {
@@ -107,7 +114,31 @@ export function initLegend(
       expandedRanges.add(range);
       notifyChange();
     },
+
+    scrollToRange(range: ByteRange): void {
+      const tr = rangeToTr.get(range);
+      if (!tr) return;
+      const containerRect = container.getBoundingClientRect();
+      const trRect        = tr.getBoundingClientRect();
+      const headerHeight  = thead.getBoundingClientRect().height;
+      const visibleTop    = containerRect.top + headerHeight;
+      const visibleBottom = containerRect.bottom;
+      if (trRect.top >= visibleTop && trRect.bottom <= visibleBottom) return;
+      const visibleHeight  = visibleBottom - visibleTop;
+      const rowHeight      = trRect.bottom - trRect.top;
+      const absoluteRowTop = container.scrollTop + trRect.top - visibleTop;
+      const centeredTop    = absoluteRowTop - (visibleHeight - rowHeight) / 2;
+      container.scrollTo({ top: Math.max(0, centeredTop), behavior: "smooth" });
+    },
   };
+
+  // ── Table click handler — scroll hex to clicked range ──
+  table.addEventListener("click", (e) => {
+    const tr = (e.target as HTMLElement).closest<HTMLTableRowElement>("tr[data-byteoffset]");
+    if (!tr) return;
+    const range = trToRange.get(tr);
+    if (range) handle.onClickRange?.(range);
+  });
 
   // ── Table hover handlers ──
   table.addEventListener("mouseover", (e) => {
@@ -146,6 +177,8 @@ function buildRows(
   notifyChange: () => void,
   rowMap: Map<number, HTMLTableRowElement[]>,
   rangeToRowInfo: Map<ByteRange, RowInfo>,
+  rangeToTr: Map<ByteRange, HTMLTableRowElement>,
+  trToRange: Map<HTMLTableRowElement, ByteRange>,
 ): HTMLTableRowElement[] {
   const hasChildren = range.kind === "group" && range.children.length > 0;
 
@@ -156,6 +189,8 @@ function buildRows(
   const existing = rowMap.get(range.start);
   if (existing) existing.push(tr);
   else rowMap.set(range.start, [tr]);
+  rangeToTr.set(range, tr);
+  trToRange.set(tr, range);
 
   // ── Swatch — all rows get their own color ──
   const swatchTd = document.createElement("td");
@@ -203,7 +238,7 @@ function buildRows(
     const directChildRows:   HTMLTableRowElement[] = [];
 
     for (const child of children) {
-      const rows = buildRows(tbody, child, depth + 1, expandedRanges, notifyChange, rowMap, rangeToRowInfo);
+      const rows = buildRows(tbody, child, depth + 1, expandedRanges, notifyChange, rowMap, rangeToRowInfo, rangeToTr, trToRange);
       allDescendantRows.push(...rows);
       directChildRows.push(rows[0]!);
       result.push(...rows);

@@ -78,6 +78,7 @@ export interface ViewerHandle {
 export interface HexViewHandle extends ViewerHandle {
   updateColorMap(ranges: ColoredRange[]): void;
   onClickRange: ((range: ByteRange) => void) | null;
+  scrollToOffset(offset: number): void;
 }
 
 // ── Formatters ────────────────────────────────────────────────────────────────
