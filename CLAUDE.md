@@ -182,6 +182,11 @@ The full UI is implemented and working:
 - **Click to scroll** — clicking on a segment in the hex view should scroll to and expand the corresponding
   legend in the legend view. Clicking on a legend in the legend view should scroll the hex view to show the
   start of the same section (even if the same click expands or collapses a group)
+- **Display thumbnails** — When expanding a `Thumbnail Data` group, one of the entries should be a `JPEG Data`.
+  It would be really cool if that data were parsed as an actual JPEG and displayed in another row below
+  (maybe this row would need to be a bit taller to display the thumbnail in a decent size). It would also be
+  neat to display the main thumbnail for the file on the Summary panel somewhere (Maybe to the left of the
+  Engine/Size/Names/etc. text?)
 
 ## Future ideas
 
