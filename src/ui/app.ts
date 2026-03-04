@@ -76,8 +76,8 @@ async function openFile(file: File): Promise<void> {
 
   titleEl.textContent = file.name;
   renderSummary(result, file);
-  initHexView(hexPanel, hexColHeader, buffer, result, DEFAULT_OPTIONS);
-  initLegend(legendPanel, result.ranges);
+  const hexView = initHexView(hexPanel, hexColHeader, buffer, result, DEFAULT_OPTIONS);
+  initLegend(legendPanel, result.ranges, hexView.updateColorMap);
 }
 
 // ── Summary panel ─────────────────────────────────────────────────────────────

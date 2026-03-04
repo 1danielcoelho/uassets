@@ -1,26 +1,14 @@
 import type { ByteRange } from "../types.ts";
 import { fGuidToString } from "../parser/utils.ts";
-
-// ── Palette (keep in sync with hex-view.ts) ───────────────────────────────────
-
-const PALETTE = [
-  "#1c3d5a", // blue
-  "#1a4728", // green
-  "#4a1f2e", // crimson
-  "#3d2c0e", // amber
-  "#28184a", // purple
-  "#0e3a3a", // teal
-  "#4a3a0e", // gold
-  "#3a0e3a", // magenta
-  "#0e2a4a", // navy
-  "#2a4a0e", // lime
-  "#4a280e", // rust
-  "#0e3a28", // jade
-];
+import { colorForLabel, type ActiveRange } from "./colors.ts";
 
 // ── Public API ────────────────────────────────────────────────────────────────
 
-export function initLegend(container: HTMLElement, ranges: ByteRange[]): void {
+export function initLegend(
+  container: HTMLElement,
+  ranges: ByteRange[],
+  onColorMapChange?: (ranges: ActiveRange[]) => void,
+): void {
   container.innerHTML = "";
   const table = document.createElement("table");
   table.className = "legend-table";
@@ -42,10 +30,43 @@ export function initLegend(container: HTMLElement, ranges: ByteRange[]): void {
     hrow.appendChild(th);
   }
 
+  // ── Expansion state ──
+  const expandedRanges = new Set<ByteRange>();
+
+  const notifyChange = onColorMapChange
+    ? () => onColorMapChange(buildActiveRanges(ranges, expandedRanges))
+    : () => {};
+
   // ── Rows ──
   const tbody = table.createTBody();
-  for (let i = 0; i < ranges.length; i++) {
-    buildRows(tbody, ranges[i]!, PALETTE[i % PALETTE.length]!, 0);
+  for (const range of ranges) {
+    buildRows(tbody, range, 0, expandedRanges, notifyChange);
+  }
+}
+
+// ── Active range computation ───────────────────────────────────────────────────
+
+/** Returns the "frontier" of visible-expanded ranges for the hex color map.
+ *  If a group is expanded, its children are used instead of the group itself. */
+function buildActiveRanges(ranges: ByteRange[], expandedRanges: Set<ByteRange>): ActiveRange[] {
+  const result: ActiveRange[] = [];
+  for (const range of ranges) {
+    if (range.kind === "group" && range.children.length > 0 && expandedRanges.has(range)) {
+      result.push(...buildActiveRanges(range.children, expandedRanges));
+    } else {
+      result.push({ start: range.start, end: range.end, label: range.label });
+    }
+  }
+  return result;
+}
+
+/** Recursively removes a range and all its descendants from the expanded set. */
+function removeDescendantsFromExpanded(range: ByteRange, expandedRanges: Set<ByteRange>): void {
+  expandedRanges.delete(range);
+  if (range.kind === "group") {
+    for (const child of range.children) {
+      removeDescendantsFromExpanded(child, expandedRanges);
+    }
   }
 }
 
@@ -54,8 +75,9 @@ export function initLegend(container: HTMLElement, ranges: ByteRange[]): void {
 function buildRows(
   tbody: HTMLTableSectionElement,
   range: ByteRange,
-  color: string,
   depth: number,
+  expandedRanges: Set<ByteRange>,
+  notifyChange: () => void,
 ): HTMLTableRowElement[] {
   const isGroup     = range.kind === "group";
   const hasChildren = isGroup && (range as Extract<ByteRange, { kind: "group" }>).children.length > 0;
@@ -63,15 +85,13 @@ function buildRows(
   const tr = document.createElement("tr");
   tr.className = hasChildren ? "legend-row legend-group-row" : "legend-row";
 
-  // ── Swatch ──
+  // ── Swatch — all rows get their own color ──
   const swatchTd = document.createElement("td");
   swatchTd.className = "legend-swatch";
-  if (depth === 0) {
-    const dot = document.createElement("div");
-    dot.className = "swatch-dot";
-    dot.style.background = color;
-    swatchTd.appendChild(dot);
-  }
+  const dot = document.createElement("div");
+  dot.className = "swatch-dot";
+  dot.style.background = colorForLabel(range.label);
+  swatchTd.appendChild(dot);
   tr.appendChild(swatchTd);
 
   // ── Size ──
@@ -111,7 +131,7 @@ function buildRows(
     const directChildRows:   HTMLTableRowElement[] = [];
 
     for (const child of children) {
-      const rows = buildRows(tbody, child, color, depth + 1);
+      const rows = buildRows(tbody, child, depth + 1, expandedRanges, notifyChange);
       allDescendantRows.push(...rows);
       directChildRows.push(rows[0]!); // first row is the child's own <tr>
       result.push(...rows);
@@ -135,10 +155,14 @@ function buildRows(
           const innerToggle = row.querySelector<HTMLElement>(".legend-toggle");
           if (innerToggle) innerToggle.textContent = "▶";
         }
+        removeDescendantsFromExpanded(range, expandedRanges);
+        notifyChange();
       } else {
         // Expand: show only direct children; each inner group manages its own state
         toggleEl.textContent = "▼";
         for (const row of directChildRows) row.style.display = "";
+        expandedRanges.add(range);
+        notifyChange();
       }
     });
   }

@@ -18,7 +18,10 @@
       "Bash(awk:*)",
       "Bash(sed:*)",
       "Bash(grep:*)",
-      "Bash(timeout 8 bun dev.ts:*)"
+      "Bash(timeout 8 bun dev.ts:*)",
+      "Bash(bun build:*)",
+      "Bash(/home/daniel/.bun/bin/bun build:*)",
+      "Bash(/home/daniel/.bun/bin/bun test:*)"
     ],
     "additionalDirectories": [
       "/tmp"

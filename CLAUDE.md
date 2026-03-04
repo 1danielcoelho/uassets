@@ -171,12 +171,6 @@ The full UI is implemented and working:
 
 ## Next steps
 
-- **Different approach for picking colors** — Right now the code defines a PALETTE of colors, and indexes
-  into them modulo their size. What we should do instead is have a function that produces a color for any
-  string, by hashing the string and using that to produce a hue color for a HSV color
-- **Color according to expansion** — Right now only top-level entries have colors; things inside groups
-  have no color in the legend or hex view. When a group is expanded, its children should get their own
-  colors and be distinctly colored in the hex view
 - **Hex ↔ legend hover sync** — hovering a legend row should highlight the matching byte range in the
   hex view, and vice versa; greying out off-screen legend entries via IntersectionObserver
 - **Click to scroll** — clicking on a segment in the hex view should scroll to and expand the corresponding

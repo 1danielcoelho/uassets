@@ -1,26 +1,10 @@
-import type { ByteRange, ParseResult, Options } from "../types.ts";
+import type { ParseResult, Options } from "../types.ts";
+import { colorForLabel, type ActiveRange } from "./colors.ts";
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
 export const ROW_HEIGHT = 20; // px — must match .hex-row height in CSS
 const OVERSCAN = 30;          // extra rows rendered above/below the viewport
-
-// ── Color palette (dark backgrounds, readable with light hex text) ────────────
-
-const PALETTE = [
-  "#1c3d5a", // blue
-  "#1a4728", // green
-  "#4a1f2e", // crimson
-  "#3d2c0e", // amber
-  "#28184a", // purple
-  "#0e3a3a", // teal
-  "#4a3a0e", // gold
-  "#3a0e3a", // magenta
-  "#0e2a4a", // navy
-  "#2a4a0e", // lime
-  "#4a280e", // rust
-  "#0e3a28", // jade
-];
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -33,17 +17,17 @@ interface ColoredRange {
 
 // ── Color map ─────────────────────────────────────────────────────────────────
 
-/** Assign a palette color to each top-level range. Parser guarantees sorted. */
-function buildColorMap(ranges: ByteRange[]): ColoredRange[] {
+/** Build a color map from the currently-active ranges (leaf level of the expanded tree). */
+function buildColorMap(ranges: ActiveRange[]): ColoredRange[] {
   return ranges.map((r, i) => ({
     start: r.start,
     end:   r.end,
-    color: PALETTE[i % PALETTE.length]!,
+    color: colorForLabel(r.label),
     idx:   i,
   }));
 }
 
-/** Binary search: top-level range containing `offset`, or null if unannotated. */
+/** Binary search: find the colored range containing `offset`, or null. */
 function colorForByte(offset: number, map: ColoredRange[]): ColoredRange | null {
   let lo = 0, hi = map.length - 1;
   while (lo <= hi) {
@@ -120,13 +104,13 @@ export function initHexView(
   buffer: ArrayBuffer,
   result: ParseResult,
   options: Options,
-): void {
+): { updateColorMap: (ranges: ActiveRange[]) => void } {
   currentAbort?.abort();
   currentAbort = new AbortController();
   const { signal } = currentAbort;
 
   const bytes       = new Uint8Array(buffer);
-  const colorMap    = buildColorMap(result.ranges);
+  let colorMap      = buildColorMap(result.ranges.map(r => ({ start: r.start, end: r.end, label: r.label })));
   const bytesPerRow = options.bytesPerRow;
   const totalRows   = Math.ceil(result.totalBytes / bytesPerRow);
   const totalHeight = totalRows * ROW_HEIGHT;
@@ -153,15 +137,18 @@ export function initHexView(
   spacer.appendChild(rowsEl);
 
   // ── Render window ────────────────────────────────────────────────────────
-  let renderedFirstRow = -1;
+  let renderedFirstRow    = -1;
+  let renderedMapVersion  = -1;
+  let mapVersion          = 0;
 
   function renderWindow(): void {
     const scrollTop    = container.scrollTop;
     const viewportRows = Math.ceil(Math.max(container.clientHeight, 400) / ROW_HEIGHT);
     const firstRow     = Math.max(0, Math.floor(scrollTop / ROW_HEIGHT) - OVERSCAN);
 
-    if (firstRow === renderedFirstRow) return;
-    renderedFirstRow = firstRow;
+    if (firstRow === renderedFirstRow && mapVersion === renderedMapVersion) return;
+    renderedFirstRow   = firstRow;
+    renderedMapVersion = mapVersion;
 
     const lastRow = Math.min(totalRows, firstRow + viewportRows + OVERSCAN * 2);
     rowsEl.style.top = `${firstRow * ROW_HEIGHT}px`;
@@ -175,4 +162,12 @@ export function initHexView(
 
   container.addEventListener("scroll", renderWindow, { passive: true, signal });
   renderWindow();
+
+  return {
+    updateColorMap(ranges: ActiveRange[]): void {
+      colorMap = buildColorMap(ranges);
+      mapVersion++;
+      renderWindow();
+    },
+  };
 }
