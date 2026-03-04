@@ -24,6 +24,8 @@ export interface ColoredRange {
   start: number;
   end: number;
   color: string;
+  /** The original ByteRange this was derived from. */
+  range: ByteRange;
 }
 
 /** Binary search: find the colored range containing `offset`, or null. */
@@ -46,7 +48,7 @@ export function buildActiveRanges(ranges: ByteRange[], expandedRanges: Set<ByteR
     if (range.kind === "group" && range.children.length > 0 && expandedRanges.has(range)) {
       result.push(...buildActiveRanges(range.children, expandedRanges));
     } else {
-      result.push({ start: range.start, end: range.end, color: colorForLabel(range.label) });
+      result.push({ start: range.start, end: range.end, color: colorForLabel(range.label), range });
     }
   }
   return result;
@@ -70,6 +72,7 @@ export interface ViewerHandle {
 
 export interface HexViewHandle extends ViewerHandle {
   updateColorMap(ranges: ColoredRange[]): void;
+  onClickRange: ((range: ByteRange) => void) | null;
 }
 
 // ── Formatters ────────────────────────────────────────────────────────────────

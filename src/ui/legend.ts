@@ -7,7 +7,17 @@ import {
 
 // ── Public types ──────────────────────────────────────────────────────────────
 
-export type LegendHandle = ViewerHandle;
+export interface LegendHandle extends ViewerHandle {
+  expandRange(range: ByteRange): void;
+}
+
+// ── Internal ──────────────────────────────────────────────────────────────────
+
+interface RowInfo {
+  directChildRows:   HTMLTableRowElement[];
+  allDescendantRows: HTMLTableRowElement[];
+  toggleEl:          HTMLElement;
+}
 
 // ── Public API ────────────────────────────────────────────────────────────────
 
@@ -49,10 +59,13 @@ export function initLegend(
   // setHovered picks the first visible one.
   const rowMap = new Map<number, HTMLTableRowElement[]>();
 
+  // ── Range → row info map for programmatic expansion ──
+  const rangeToRowInfo = new Map<ByteRange, RowInfo>();
+
   // ── Rows ──
   const tbody = table.createTBody();
   for (const range of ranges) {
-    buildRows(tbody, range, 0, expandedRanges, notifyChange, rowMap);
+    buildRows(tbody, range, 0, expandedRanges, notifyChange, rowMap, rangeToRowInfo);
   }
 
   // ── Hover state ──
@@ -78,6 +91,20 @@ export function initLegend(
           hoveredRow = row;
         }
       }
+    },
+
+    expandRange(range: ByteRange): void {
+      if (range.kind !== "group") return;
+      const info = rangeToRowInfo.get(range);
+      if (!info) return;
+      const { directChildRows, toggleEl } = info;
+      // If already expanded, do nothing (hex click is expand-only)
+      const isExpanded = directChildRows.length > 0 && directChildRows[0]!.style.display !== "none";
+      if (isExpanded) return;
+      toggleEl.textContent = "▼";
+      for (const row of directChildRows) row.style.display = "";
+      expandedRanges.add(range);
+      notifyChange();
     },
   };
 
@@ -108,6 +135,7 @@ function buildRows(
   expandedRanges: Set<ByteRange>,
   notifyChange: () => void,
   rowMap: Map<number, HTMLTableRowElement[]>,
+  rangeToRowInfo: Map<ByteRange, RowInfo>,
 ): HTMLTableRowElement[] {
   const isGroup     = range.kind === "group";
   const hasChildren = isGroup && (range as Extract<ByteRange, { kind: "group" }>).children.length > 0;
@@ -165,7 +193,7 @@ function buildRows(
     const directChildRows:   HTMLTableRowElement[] = [];
 
     for (const child of children) {
-      const rows = buildRows(tbody, child, depth + 1, expandedRanges, notifyChange, rowMap);
+      const rows = buildRows(tbody, child, depth + 1, expandedRanges, notifyChange, rowMap, rangeToRowInfo);
       allDescendantRows.push(...rows);
       directChildRows.push(rows[0]!);
       result.push(...rows);
@@ -174,6 +202,8 @@ function buildRows(
     for (const row of allDescendantRows) row.style.display = "none";
 
     const toggleEl = nameTd.querySelector<HTMLElement>(".legend-toggle")!;
+
+    rangeToRowInfo.set(range, { directChildRows, allDescendantRows, toggleEl });
 
     tr.addEventListener("click", () => {
       const isExpanded = directChildRows.length > 0 && directChildRows[0]!.style.display !== "none";

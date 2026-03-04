@@ -160,10 +160,6 @@ The parser is fully refactored and all 6 test assets pass (6/6).
 
 ## Next steps
 
-- **Click to expand** — clicking on a group annotation on the hex view should also expand the group on the legend
-  view, which should in turn cause the group to be broken up into the coloring the individual child annotations.
-  You should be able to progressively click on nested to "step into them" in that way, as if you're expanding
-  the nested group tree on the legend view
 - **Click to scroll** — clicking on a segment in the hex view should scroll to and expand the corresponding
   legend in the legend view. Clicking on a legend in the legend view should scroll the hex view to show the
   start of the same section (even if the same click expands or collapses a group)

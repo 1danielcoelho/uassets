@@ -187,9 +187,21 @@ export function initHexView(
     handle.onHoverChange?.(null);
   }, { signal });
 
+  // ── Click handler — expand group on click ─────────────────────────────────
+  container.addEventListener("click", (e) => {
+    const target = e.target as HTMLElement;
+    if (!target.classList.contains("b") && !target.classList.contains("c")) return;
+    const offsetStr = target.getAttribute("data-byteoffset");
+    if (offsetStr === null) return;
+    const cr = colorForByte(Number(offsetStr), colorMap);
+    if (!cr || cr.range.kind !== "group") return;
+    handle.onClickRange?.(cr.range);
+  }, { signal });
+
   // ── Handle ───────────────────────────────────────────────────────────────
   const handle: HexViewHandle = {
     onHoverChange: null,
+    onClickRange: null,
 
     updateColorMap(ranges: ColoredRange[]): void {
       colorMap = ranges;
