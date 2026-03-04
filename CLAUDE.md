@@ -178,12 +178,13 @@ The full UI is implemented and working:
      things like that. Not sure if possible when uploading a file like this)
    - `formatBytes` is using 1024 for kilo, and 1024 * 1024 for mega, etc. I want it to use 1000 for kilo, 1 million
      for mega, etc. (as those are SI prefixes)
-   - Move the stuff in `colors.ts` and `formatBytes`, `escHtml` from app.ts to a new `utils.ts` file in the `ui` folder. Move `colorForByte` and `escChr` there as well, and any other of these simple utils functions to their respective utils files
+   - Move the stuff in `colors.ts` and `formatBytes`, `escHtml` from app.ts to a new `utils.ts` file in the `ui` folder. Move `colorForByte` and `escChr`, `valueStr`, `formatSize` (another copy of `formatBytes`?) there as well, and any other of these simple utils functions to their respective utils files
    - Actually, maybe `escChr` and `escHtml` can be combined somehow?
    - Remove `ActiveRange`, and just use `ColoredRange` everywhere
    - in `initHexView` the function `applyHoveredClass` is spammed on mouse events, and does two big queries... Can you optimize this a bit? For example you can just track the last elements you added hovered to, and on the next call use those references to remove the hovered class
    - There are some `// TODO:` comments in the code mentioning other things that need cleanup
    - There are a couple errors on hex-view.ts within `applyHoveredClass` saying `Type 'NodeListOf<HTMLElement>' must have a '[Symbol.iterator]()' method that returns an iterator.ts(2488)`
+   - `HexViewHandle` and `LegendHandle` are very similar.. can they be combined and reused?
 - **Click to expand** — clicking on a group annotation on the hex view should also expand the group on the legend
   view, which should in turn cause the group to be broken up into the coloring the individual child annotations.
   You should be able to progressively click on nested to "step into them" in that way, as if you're expanding
