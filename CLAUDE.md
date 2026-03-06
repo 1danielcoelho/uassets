@@ -160,17 +160,19 @@ The parser is fully refactored and all 6 test assets pass (6/6).
 
 ## Next steps
 
-- **Contiguous selection** — This may be very difficult or make a mess, so feel free to push back, but it would be nice if doing a text select that starts on the bytes (raw) column only selected stuff in the bytes (raw) column. As it is now, doing a text selection treats the address, bytes (raw) and bytes (ascii) text as contiguous, which is not right
-- **Sync selection** — I don't want to mess with the standard mouse behavior too much, but it would be nice if selecting a section on the bytes (raw) view selected the same section on the bytes (ascii) view in some (visual) way. It doesn't have to add it to the actual selection, but at least highlight it so that we know what corresponds to what. The same would happen when selecting something on the Bytes (ascii) view
 - **Display thumbnails** — When expanding a `Thumbnail Data` group, one of the entries should be a `JPEG Data`.
   It would be really cool if that data were parsed as an actual JPEG and displayed in another row below
   (maybe this row would need to be a bit taller to display the thumbnail in a decent size). It would also be
-  neat to display the main thumbnail for the file on the Summary panel somewhere (Maybe to the left of the
-  Engine/Size/Names/etc. text?)
+  neat to display the main thumbnail for the file on the Summary panel somewhere
 - **Search**: Allow user to search for bytes and also text
 - **Go to**: Allow user to type an address in hex or decimal to go to that location
 - **Resizeable divider** — Between the hex view and the legend view
 - **Example assets** — Instead of just placeholder text, show buttons for easily opening an example
+
+## Polishing steps
+
+- **Contiguous selection** — This may be very difficult or make a mess, so feel free to push back, but it would be nice if doing a text select that starts on the bytes (raw) column only selected stuff in the bytes (raw) column. As it is now, doing a text selection treats the address, bytes (raw) and bytes (ascii) text as contiguous, which is not right
+- **Sync selection** — I don't want to mess with the standard mouse behavior too much, but it would be nice if selecting a section on the bytes (raw) view selected the same section on the bytes (ascii) view in some (visual) way. It doesn't have to add it to the actual selection, but at least highlight it so that we know what corresponds to what. The same would happen when selecting something on the Bytes (ascii) view
 
 # Bun
 

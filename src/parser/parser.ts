@@ -410,7 +410,7 @@ function parseOpaqueBlobs(
   r: BinaryReader,
   h: PackageFileSummaryData,
   names: string[],
-): void {
+): AssetSummary["thumbnail"] {
   // IMPORTANT: Every section offset field from PackageFileSummaryData must be listed here.
   // blobSize() finds a section's size by scanning for the next known offset — if a new
   // section is added to the header but its offset is omitted here, it will silently
@@ -445,6 +445,8 @@ function parseOpaqueBlobs(
   // Layout: image data blobs are stored BEFORE the TOC. The TOC (at thumbnailTableOffset)
   // has count + per-entry (className, objectPath, fileOffset). fileOffset points back into
   // the image data region that precedes the TOC.
+  let primaryThumbnail: AssetSummary["thumbnail"] = undefined;
+
   if (h.thumbnailTableOffset > 0) {
     r.seek(h.thumbnailTableOffset);
     const thumbEntries: { objectPath: string; fileOffset: number }[] = [];
@@ -474,7 +476,15 @@ function parseOpaqueBlobs(
           if (width > 0 && absH > 0) {
             const dataSize = r.readInt32("Compressed Data Size");
             if (dataSize > 0) {
-              r.readBytes(dataSize, isJPEG ? "JPEG Data" : "PNG Data");
+              const imgData = r.readBytes(dataSize, isJPEG ? "JPEG Data" : "PNG Data");
+              if (!primaryThumbnail) {
+                primaryThumbnail = {
+                  width,
+                  height: absH,
+                  mimeType: isJPEG ? "image/jpeg" : "image/png",
+                  data: imgData.slice(), // detach from the shared ArrayBuffer view
+                };
+              }
             }
           }
           return `${width}×${absH} ${isJPEG ? "JPEG" : "PNG"}`;
@@ -586,6 +596,8 @@ function parseOpaqueBlobs(
       }
     });
   }
+
+  return primaryThumbnail;
 }
 
 // ── Metadata ──────────────────────────────────────────────────────────────────
@@ -703,10 +715,10 @@ export function parseUAsset(buffer: ArrayBuffer): ParseResult {
   const softObjectPaths = parseIndexTables(r, h, names, imports, exports);
 
   // Step 4: Opaque and structured blob sections
-  parseOpaqueBlobs(r, h, names);
+  const primaryThumbnail = parseOpaqueBlobs(r, h, names);
 
   // Step 5: Metadata (after opaque blobs; needs softObjectPaths)
-  const metadataCount = parseMetadata(r, h, names, softObjectPaths);
+  parseMetadata(r, h, names, softObjectPaths);
 
   // Step 6: Export data — all exports under one "Exports" group
   const firstExportOffset = exports
@@ -752,7 +764,7 @@ export function parseUAsset(buffer: ArrayBuffer): ParseResult {
     customVersions: h.customVersions,
     properties: [],
     nameCount: names.length,
-    metadataCount,
+    thumbnail: primaryThumbnail,
     exports: exports.map((exp, i) => ({
       index: i,
       objectName: resolveName(names, exp.objectName),

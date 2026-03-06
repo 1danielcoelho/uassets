@@ -44,8 +44,6 @@ export interface AssetSummary {
   properties: { label: string; value: string }[];
   /** Total number of entries in the package name table. */
   nameCount: number;
-  /** Total number of object + root metadata entries (NumObjectMeta + NumRootMeta). */
-  metadataCount: number;
   /** Resolved export table entries. */
   exports: Array<{
     index: number;
@@ -62,6 +60,13 @@ export interface AssetSummary {
     className: string;
     objectName: string;
   }>;
+  /** Primary thumbnail image, if present in the asset. */
+  thumbnail?: {
+    width: number;
+    height: number;
+    mimeType: "image/jpeg" | "image/png";
+    data: Uint8Array;
+  };
 }
 
 // ─── Options ─────────────────────────────────────────────────────────────────

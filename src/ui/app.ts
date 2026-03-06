@@ -92,6 +92,9 @@ async function openFile(file: File): Promise<void> {
 
 // ── Summary panel ─────────────────────────────────────────────────────────────
 
+// Track the current thumbnail object URL so we can revoke it when a new file is loaded.
+let currentThumbUrl: string | null = null;
+
 function renderSummary(result: ParseResult, file: File): void {
   const { summary, totalBytes } = result;
   const path = summary.packageName || "—";
@@ -100,17 +103,30 @@ function renderSummary(result: ParseResult, file: File): void {
     ? metaLine("Modified", new Date(file.lastModified).toLocaleString())
     : "";
 
-  summaryPanel.innerHTML = [
+  const textHtml = [
     `<div class="asset-class">${escHtml(file.name)}</div>`,
     metaLine("File size",       formatSize(totalBytes)),
     modifiedLine,
     metaLine("Content path",    path),
     metaLine("Engine version",  summary.engineVersion || "—"),
-    metaLine("Exports",         `${summary.exports.length}`),
-    metaLine("Imports",         `${summary.imports.length}`),
-    metaLine("Metadata",        `${summary.metadataCount} ${summary.metadataCount === 1 ? "tag" : "tags"}`),
     ...summary.properties.map(p => metaLine(p.label, p.value)),
   ].join("");
+
+  // Revoke any previous blob URL to free memory.
+  if (currentThumbUrl) { URL.revokeObjectURL(currentThumbUrl); currentThumbUrl = null; }
+
+  if (summary.thumbnail) {
+    const blob = new Blob([summary.thumbnail.data], { type: summary.thumbnail.mimeType });
+    currentThumbUrl = URL.createObjectURL(blob);
+    const { width, height } = summary.thumbnail;
+    const thumbHtml = `<img class="summary-thumb" src="${currentThumbUrl}" ` +
+                           `alt="Thumbnail ${width}×${height}" title="${width}×${height}">`;
+    // Insert thumbnail after the first element (the filename/asset-class div)
+    const splitIdx = textHtml.indexOf("</div>") + "</div>".length;
+    summaryPanel.innerHTML = textHtml.slice(0, splitIdx) + thumbHtml + textHtml.slice(splitIdx);
+  } else {
+    summaryPanel.innerHTML = textHtml;
+  }
 }
 
 function metaLine(label: string, value: string): string {
