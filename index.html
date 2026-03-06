@@ -311,6 +311,66 @@
         vertical-align: middle;
       }
 
+      /* ── Search bar ── */
+      #search-bar {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        height: 32px;
+        flex-shrink: 0;
+        background: #252525;
+        border-bottom: 1px solid #3e3e3e;
+        padding: 0 12px;
+      }
+
+      #search-bar[hidden] { display: none; }
+
+      #search-input {
+        flex: 0 1 280px;
+        background: #1a1a1a;
+        border: 1px solid #444;
+        color: #d4d4d4;
+        font-family: inherit;
+        font-size: 12px;
+        padding: 3px 8px;
+        border-radius: 3px;
+        outline: none;
+      }
+
+      #search-input:focus { border-color: #4a9eff; }
+      #search-input.no-match { border-color: #b05050; background: #2a1818; }
+
+      #search-count {
+        color: #666;
+        font-size: 11px;
+        min-width: 52px;
+        text-align: right;
+      }
+
+      .search-btn {
+        background: none;
+        border: 1px solid #444;
+        color: #ccc;
+        cursor: pointer;
+        padding: 2px 8px;
+        border-radius: 3px;
+        font-size: 11px;
+        font-family: inherit;
+        line-height: 1.4;
+      }
+      .search-btn:hover:not(:disabled) { background: #3a3a3a; }
+      .search-btn:disabled { opacity: 0.35; cursor: default; }
+
+      .search-mode-label {
+        color: #999;
+        font-size: 11px;
+        cursor: pointer;
+        user-select: none;
+        display: flex;
+        align-items: center;
+        gap: 4px;
+      }
+
       /* ── Hover sync ── */
 
       /* All annotated bytes are slightly dimmed by default */
@@ -343,6 +403,16 @@
     <div id="content">
       <div id="hex-column">
         <div id="hex-col-header"></div>
+        <div id="search-bar" hidden>
+          <input id="search-input" type="text" placeholder="Search text or hex bytes…" autocomplete="off" spellcheck="false">
+          <span id="search-count"></span>
+          <button class="search-btn" id="search-prev" title="Previous (Shift+Enter)" disabled>◄</button>
+          <button class="search-btn" id="search-next" title="Next (Enter)" disabled>►</button>
+          <label class="search-mode-label" title="Search raw hex bytes (e.g. 9E 2A 83 C1)">
+            <input type="checkbox" id="search-mode-hex"> Hex
+          </label>
+          <button class="search-btn" id="search-close" title="Close (Escape)">✕</button>
+        </div>
         <div id="hex-panel"><span class="placeholder">Drop a .uasset/.umap file or use File → Open</span></div>
       </div>
       <div id="right-panel">

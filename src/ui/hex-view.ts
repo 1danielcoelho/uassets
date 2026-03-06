@@ -22,6 +22,9 @@ function rowHtml(
   bytes: Uint8Array,
   colorMap: ColoredRange[],
   bytesPerRow: number,
+  smOffsets: number[],
+  smLen: number,
+  smActiveStart: number,
 ): string {
   const rowStart = rowIndex * bytesPerRow;
   const rowEnd   = Math.min(rowStart + bytesPerRow, bytes.length);
@@ -35,6 +38,19 @@ function rowHtml(
   // We only re-query when the current offset exits the cached range.
   let cr: ReturnType<typeof colorForByte> = null;
 
+  // Two-pointer for search matches: find first match that could overlap this row.
+  // A match at start S with length smLen overlaps [rowStart, rowEnd) if S + smLen > rowStart.
+  let smPtr = smOffsets.length; // default: no matches
+  if (smLen > 0 && smOffsets.length > 0) {
+    const minStart = rowStart - smLen + 1;
+    let lo = 0, hi = smOffsets.length;
+    while (lo < hi) {
+      const mid = (lo + hi) >>> 1;
+      if ((smOffsets[mid] as number) < minStart) lo = mid + 1; else hi = mid;
+    }
+    smPtr = lo;
+  }
+
   for (let col = 0; col < bytesPerRow; col++) {
     const offset = rowStart + col;
     const inFile = offset < rowEnd;
@@ -43,6 +59,14 @@ function rowHtml(
     } else if (!inFile) {
       cr = null;
     }
+
+    // Advance search pointer past matches that ended before this offset.
+    if (smLen > 0) {
+      while (smPtr < smOffsets.length && (smOffsets[smPtr] as number) + smLen <= offset) smPtr++;
+    }
+    const isMatch  = smLen > 0 && smPtr < smOffsets.length && (smOffsets[smPtr] as number) <= offset;
+    const isActive = isMatch && (smOffsets[smPtr] as number) === smActiveStart;
+
     const rAttr  = cr ? ` data-byteoffset="${cr.start}"` : "";
     const midCls = col === half - 1 ? " mid" : "";
 
@@ -51,7 +75,15 @@ function rowHtml(
       const hex  = byte.toString(16).padStart(2, "0").toUpperCase();
       const chr  = (byte >= 32 && byte < 127) ? escHtml(String.fromCharCode(byte)) : "·";
 
-      if (cr) {
+      if (isActive) {
+        const s = ` style="background:#ffee55;border-radius:0px;color:#111"`;
+        hexPart   += `<span class="b${midCls}"${rAttr}${s}>${hex}</span>`;
+        asciiPart += `<span class="c"${rAttr}${s}>${chr}</span>`;
+      } else if (isMatch) {
+        const s = ` style="background:#ffffff;border-radius:0px;color:#111"`;
+        hexPart   += `<span class="b${midCls}"${rAttr}${s}>${hex}</span>`;
+        asciiPart += `<span class="c"${rAttr}${s}>${chr}</span>`;
+      } else if (cr) {
         const hexShadow = `;box-shadow:2px 0 0 ${cr.color}`;
         const hexBg = ` style="background:${cr.color};border-radius:0px${hexShadow}"`;
         const asciiBg = ` style="background:${cr.color};border-radius:0px"`;
@@ -95,6 +127,11 @@ export function initHexView(
   const fileBytesArray = new Uint8Array(fileBytes);
   let colorMap: ColoredRange[] = buildActiveRanges(parsedAsset.ranges, new Set<ByteRange>());
   const bytesPerRow = options.bytesPerRow;
+
+  // ── Search state ─────────────────────────────────────────────────────────
+  let smOffsets: number[] = [];
+  let smLen    = 0;
+  let smActive = -1;
   const totalRows = Math.ceil(parsedAsset.totalBytes / bytesPerRow);
   const totalHeight = totalRows * ROW_HEIGHT;
 
@@ -157,9 +194,13 @@ export function initHexView(
     const lastRow = Math.min(totalRows, firstRow + viewportRows + OVERSCAN * 2);
     rowsEl.style.top = `${firstRow * ROW_HEIGHT}px`;
 
+    const smActiveStart = smActive >= 0 && smActive < smOffsets.length
+      ? (smOffsets[smActive] as number)
+      : -1;
+
     let html = "";
     for (let r = firstRow; r < lastRow; r++) {
-      html += rowHtml(r, fileBytesArray, colorMap, bytesPerRow);
+      html += rowHtml(r, fileBytesArray, colorMap, bytesPerRow, smOffsets, smLen, smActiveStart);
     }
     rowsEl.innerHTML = html;
     lastHoveredEls = []; // stale refs after DOM rebuild
@@ -225,6 +266,14 @@ export function initHexView(
     setHovered(range: HoverRange | null): void {
       hoveredRange = range;
       applyHoveredClass();
+    },
+
+    setSearchState(offsets: number[], queryLen: number, activeIdx: number): void {
+      smOffsets = offsets;
+      smLen     = queryLen;
+      smActive  = activeIdx;
+      mapVersion++;
+      renderWindow();
     },
 
     scrollToOffset(offset: number): void {

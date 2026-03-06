@@ -160,10 +160,6 @@ The parser is fully refactored and all 6 test assets pass (6/6).
 
 ## Next steps
 
-- **Display thumbnails** — When expanding a `Thumbnail Data` group, one of the entries should be a `JPEG Data`.
-  It would be really cool if that data were parsed as an actual JPEG and displayed in another row below
-  (maybe this row would need to be a bit taller to display the thumbnail in a decent size). It would also be
-  neat to display the main thumbnail for the file on the Summary panel somewhere
 - **Search**: Allow user to search for bytes and also text
 - **Go to**: Allow user to type an address in hex or decimal to go to that location
 - **Resizeable divider** — Between the hex view and the legend view

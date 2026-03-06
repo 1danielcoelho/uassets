@@ -3,7 +3,7 @@ import { DEFAULT_OPTIONS } from "../types.ts";
 import { parseUAsset } from "../parser/parser.ts";
 import { initHexView } from "./hex-view.ts";
 import { initLegend } from "./legend.ts";
-import { formatSize, escHtml } from "./utils.ts";
+import { formatSize, escHtml, findMatches, type HexViewHandle, type SearchMode } from "./utils.ts";
 
 // ── Elements ──────────────────────────────────────────────────────────────────
 
@@ -14,6 +14,16 @@ const legendPanel  = document.getElementById("legend-panel")!;
 const menuFile     = document.getElementById("menu-file")!;
 const dropdownFile = document.getElementById("dropdown-file")!;
 const menuFileOpen = document.getElementById("menu-file-open")!;
+
+// ── Search elements ───────────────────────────────────────────────────────────
+
+const searchBar     = document.getElementById("search-bar") as HTMLElement;
+const searchInput   = document.getElementById("search-input") as HTMLInputElement;
+const searchCount   = document.getElementById("search-count")!;
+const searchPrev    = document.getElementById("search-prev") as HTMLButtonElement;
+const searchNext    = document.getElementById("search-next") as HTMLButtonElement;
+const searchModeHex = document.getElementById("search-mode-hex") as HTMLInputElement;
+const searchClose   = document.getElementById("search-close")!;
 
 // ── File input ────────────────────────────────────────────────────────────────
 
@@ -54,6 +64,90 @@ document.addEventListener("drop", (e) => {
   if (file) openFile(file);
 });
 
+// ── Search state ──────────────────────────────────────────────────────────────
+
+let fileBytes: Uint8Array | null = null;
+let hexHandle: HexViewHandle | null = null;
+let searchOffsets: number[] = [];
+let searchLen     = 0;
+let searchActive  = -1;
+
+function runSearch(): void {
+  if (!fileBytes || !hexHandle) return;
+  const query = searchInput.value;
+  const mode: SearchMode = searchModeHex.checked ? "hex" : "text";
+
+  const result = query ? findMatches(fileBytes, query, mode) : { offsets: [], queryLen: 0 };
+  searchOffsets = result.offsets;
+  searchLen     = result.queryLen;
+  searchActive  = searchOffsets.length > 0 ? 0 : -1;
+
+  hexHandle.setSearchState(searchOffsets, searchLen, searchActive);
+  updateSearchUI(query);
+
+  if (searchActive >= 0) {
+    hexHandle.scrollToOffset(searchOffsets[searchActive]!);
+  }
+}
+
+function goToMatch(delta: number): void {
+  if (searchOffsets.length === 0 || !hexHandle) return;
+  searchActive = ((searchActive + delta) % searchOffsets.length + searchOffsets.length) % searchOffsets.length;
+  hexHandle.setSearchState(searchOffsets, searchLen, searchActive);
+  hexHandle.scrollToOffset(searchOffsets[searchActive]!);
+  updateSearchUI(searchInput.value);
+}
+
+function updateSearchUI(query: string): void {
+  if (searchOffsets.length === 0) {
+    searchCount.textContent = query ? "0 matches" : "";
+    searchInput.classList.toggle("no-match", !!query);
+  } else {
+    searchCount.textContent = `${searchActive + 1} / ${searchOffsets.length}`;
+    searchInput.classList.remove("no-match");
+  }
+  searchPrev.disabled = searchOffsets.length === 0;
+  searchNext.disabled = searchOffsets.length === 0;
+}
+
+function showSearch(): void {
+  searchBar.hidden = false;
+  searchInput.focus();
+  searchInput.select();
+}
+
+function hideSearch(): void {
+  searchBar.hidden = true;
+  searchInput.classList.remove("no-match");
+  if (hexHandle) hexHandle.setSearchState([], 0, -1);
+  searchOffsets = [];
+  searchLen     = 0;
+  searchActive  = -1;
+  searchCount.textContent = "";
+}
+
+searchInput.addEventListener("input", runSearch);
+
+searchInput.addEventListener("keydown", (e) => {
+  if (e.key === "Enter") { e.preventDefault(); goToMatch(e.shiftKey ? -1 : 1); }
+  if (e.key === "Escape") { hideSearch(); }
+});
+
+searchPrev.addEventListener("click", () => goToMatch(-1));
+searchNext.addEventListener("click", () => goToMatch(1));
+searchModeHex.addEventListener("change", runSearch);
+searchClose.addEventListener("click", hideSearch);
+
+document.addEventListener("keydown", (e) => {
+  if ((e.ctrlKey || e.metaKey) && e.key === "f") {
+    e.preventDefault();
+    showSearch();
+  }
+  if (e.key === "Escape" && !searchBar.hidden) {
+    hideSearch();
+  }
+});
+
 // ── Open & parse ──────────────────────────────────────────────────────────────
 
 async function openFile(file: File): Promise<void> {
@@ -71,23 +165,28 @@ async function openFile(file: File): Promise<void> {
     return;
   }
 
+  // Reset search state for the new file.
+  fileBytes = new Uint8Array(buffer);
+  hideSearch();
+  searchInput.value = "";
+
   renderSummary(result, file);
-  const hexView    = initHexView(hexPanel, hexColHeader, buffer, result, DEFAULT_OPTIONS);
-  const legendView = initLegend(legendPanel, result.ranges, hexView.updateColorMap);
+  hexHandle   = initHexView(hexPanel, hexColHeader, buffer, result, DEFAULT_OPTIONS);
+  const legendView = initLegend(legendPanel, result.ranges, hexHandle.updateColorMap);
 
   // Cross-wire hover sync: each component calls the other's setHovered when the user
   // interacts with it, but setHovered itself never calls onHoverChange to avoid loops.
-  hexView.onHoverChange    = legendView.setHovered.bind(legendView);
-  legendView.onHoverChange = hexView.setHovered.bind(hexView);
+  hexHandle.onHoverChange    = legendView.setHovered.bind(legendView);
+  legendView.onHoverChange   = hexHandle.setHovered.bind(hexHandle);
 
   // Hex click → expand group in legend (if applicable) then scroll legend to that row.
-  hexView.onClickRange = (range) => {
+  hexHandle.onClickRange = (range) => {
     legendView.expandRange(range);
     legendView.scrollToRange(range);
   };
 
   // Legend click → scroll hex view to that range's start offset.
-  legendView.onClickRange = (range) => hexView.scrollToOffset(range.start);
+  legendView.onClickRange = (range) => hexHandle!.scrollToOffset(range.start);
 }
 
 // ── Summary panel ─────────────────────────────────────────────────────────────

@@ -1,6 +1,53 @@
 import type { ByteRange } from "../types.ts";
 import { fGuidToString } from "../parser/utils.ts";
 
+// ── Search ────────────────────────────────────────────────────────────────────
+
+export type SearchMode = "text" | "hex";
+
+/** Returns all byte offsets where `query` starts in `bytes`. */
+export function findMatches(
+  bytes: Uint8Array,
+  query: string,
+  mode: SearchMode,
+): { offsets: number[]; queryLen: number } {
+  if (!query) return { offsets: [], queryLen: 0 };
+
+  let needle: Uint8Array;
+  if (mode === "hex") {
+    const hexStr = query.replace(/\s+/g, "");
+    if (hexStr.length === 0 || hexStr.length % 2 !== 0) {
+      return { offsets: [], queryLen: 0 };
+    }
+    const byteArr: number[] = [];
+    for (let i = 0; i < hexStr.length; i += 2) {
+      const b = parseInt(hexStr.slice(i, i + 2), 16);
+      if (isNaN(b)) return { offsets: [], queryLen: 0 };
+      byteArr.push(b);
+    }
+    needle = new Uint8Array(byteArr);
+  } else {
+    needle = new TextEncoder().encode(query);
+  }
+
+  if (needle.length === 0) return { offsets: [], queryLen: 0 };
+
+  const offsets: number[] = [];
+  const n = bytes.length;
+  const m = needle.length;
+  const first = needle[0]!;
+
+  outer: for (let i = 0; i <= n - m; i++) {
+    if (bytes[i] !== first) continue;
+    for (let j = 1; j < m; j++) {
+      if (bytes[i + j] !== needle[j]) continue outer;
+    }
+    offsets.push(i);
+  }
+
+  return { offsets, queryLen: m };
+}
+
 // ── Color utilities ────────────────────────────────────────────────────────────
 
 /**
@@ -79,6 +126,7 @@ export interface HexViewHandle extends ViewerHandle {
   updateColorMap(ranges: ColoredRange[]): void;
   onClickRange: ((range: ByteRange) => void) | null;
   scrollToOffset(offset: number): void;
+  setSearchState(offsets: number[], queryLen: number, activeIdx: number): void;
 }
 
 // ── Formatters ────────────────────────────────────────────────────────────────
