@@ -10,6 +10,8 @@ import {
 export interface LegendHandle extends ViewerHandle {
   expandRange(range: ByteRange): void;
   scrollToRange(range: ByteRange): void;
+  expandAndScrollToRange(range: ByteRange): void;
+  setSearchResults(matches: ByteRange[], activeRange: ByteRange | null): void;
   onClickRange: ((range: ByteRange) => void) | null;
 }
 
@@ -33,22 +35,6 @@ export function initLegend(
   table.className = "legend-table";
   container.appendChild(table);
 
-  // ── Sticky header ──
-  const thead = table.createTHead();
-  const hrow = thead.insertRow();
-  hrow.className = "legend-header-row";
-  for (const [cls, text] of [
-    ["legend-swatch", ""],
-    ["legend-size",   "Bytes"],
-    ["legend-name",   "Name"],
-    ["legend-value",  "Value"],
-  ] as [string, string][]) {
-    const th = document.createElement("th");
-    th.className = cls;
-    th.textContent = text;
-    hrow.appendChild(th);
-  }
-
   // ── Expansion state ──
   const expandedRanges = new Set<ByteRange>();
 
@@ -57,8 +43,6 @@ export function initLegend(
     : () => {};
 
   // ── Row map (start offset → <tr>[]) for hover sync ──
-  // Multiple rows can share the same start offset (e.g. a group and its first child);
-  // setHovered picks the first visible one.
   const rowMap = new Map<number, HTMLTableRowElement[]>();
 
   // ── Range → row info map for programmatic expansion ──
@@ -68,10 +52,16 @@ export function initLegend(
   const rangeToTr = new Map<ByteRange, HTMLTableRowElement>();
   const trToRange = new Map<HTMLTableRowElement, ByteRange>();
 
+  // ── Parent map for ancestor-expansion ──
+  const rangeToParent = new Map<ByteRange, ByteRange>();
+
+  // ── Search highlight state ──
+  let searchHighlightedTrs: HTMLTableRowElement[] = [];
+
   // ── Rows ──
   const tbody = table.createTBody();
   for (const range of ranges) {
-    buildRows(tbody, range, 0, expandedRanges, notifyChange, rowMap, rangeToRowInfo, rangeToTr, trToRange);
+    buildRows(tbody, range, 0, expandedRanges, notifyChange, rowMap, rangeToRowInfo, rangeToTr, trToRange, rangeToParent, undefined);
   }
 
   // ── Hover state ──
@@ -120,8 +110,7 @@ export function initLegend(
       if (!tr) return;
       const containerRect = container.getBoundingClientRect();
       const trRect        = tr.getBoundingClientRect();
-      const headerHeight  = thead.getBoundingClientRect().height;
-      const visibleTop    = containerRect.top + headerHeight;
+      const visibleTop    = containerRect.top;
       const visibleBottom = containerRect.bottom;
       if (trRect.top >= visibleTop && trRect.bottom <= visibleBottom) return;
       const visibleHeight  = visibleBottom - visibleTop;
@@ -129,6 +118,44 @@ export function initLegend(
       const absoluteRowTop = container.scrollTop + trRect.top - visibleTop;
       const centeredTop    = absoluteRowTop - (visibleHeight - rowHeight) / 2;
       container.scrollTo({ top: Math.max(0, centeredTop), behavior: "smooth" });
+    },
+
+    expandAndScrollToRange(range: ByteRange): void {
+      // Collect ancestors from closest to root
+      const ancestors: ByteRange[] = [];
+      let cur = rangeToParent.get(range);
+      while (cur !== undefined) {
+        ancestors.push(cur);
+        cur = rangeToParent.get(cur);
+      }
+      // Expand from root downward
+      for (let i = ancestors.length - 1; i >= 0; i--) {
+        handle.expandRange(ancestors[i]!);
+      }
+      handle.scrollToRange(range);
+    },
+
+    setSearchResults(matches: ByteRange[], activeRange: ByteRange | null): void {
+      for (const tr of searchHighlightedTrs) {
+        tr.classList.remove("legend-search-match", "legend-search-active");
+      }
+      searchHighlightedTrs = [];
+
+      for (const range of matches) {
+        const tr = rangeToTr.get(range);
+        if (tr) {
+          tr.classList.add("legend-search-match");
+          searchHighlightedTrs.push(tr);
+        }
+      }
+
+      if (activeRange !== null) {
+        const tr = rangeToTr.get(activeRange);
+        if (tr) {
+          tr.classList.add("legend-search-active");
+          if (!searchHighlightedTrs.includes(tr)) searchHighlightedTrs.push(tr);
+        }
+      }
     },
   };
 
@@ -179,7 +206,11 @@ function buildRows(
   rangeToRowInfo: Map<ByteRange, RowInfo>,
   rangeToTr: Map<ByteRange, HTMLTableRowElement>,
   trToRange: Map<HTMLTableRowElement, ByteRange>,
+  rangeToParent: Map<ByteRange, ByteRange>,
+  parent: ByteRange | undefined,
 ): HTMLTableRowElement[] {
+  if (parent !== undefined) rangeToParent.set(range, parent);
+
   const hasChildren = range.kind === "group" && range.children.length > 0;
 
   const tr = document.createElement("tr");
@@ -238,7 +269,7 @@ function buildRows(
     const directChildRows:   HTMLTableRowElement[] = [];
 
     for (const child of children) {
-      const rows = buildRows(tbody, child, depth + 1, expandedRanges, notifyChange, rowMap, rangeToRowInfo, rangeToTr, trToRange);
+      const rows = buildRows(tbody, child, depth + 1, expandedRanges, notifyChange, rowMap, rangeToRowInfo, rangeToTr, trToRange, rangeToParent, range);
       allDescendantRows.push(...rows);
       directChildRows.push(rows[0]!);
       result.push(...rows);

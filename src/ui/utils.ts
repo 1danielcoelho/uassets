@@ -48,6 +48,33 @@ export function findMatches(
   return { offsets, queryLen: m };
 }
 
+/** Find row start offsets whose hex address string contains the query. */
+export function findAddressMatches(totalBytes: number, bytesPerRow: number, query: string): number[] {
+  const q = query.toLowerCase().replace(/^0x/, "").replace(/\s+/g, "");
+  if (!q) return [];
+  const offsets: number[] = [];
+  const totalRows = Math.ceil(totalBytes / bytesPerRow);
+  for (let r = 0; r < totalRows; r++) {
+    const rowOffset = r * bytesPerRow;
+    if (rowOffset.toString(16).padStart(8, "0").includes(q)) offsets.push(rowOffset);
+  }
+  return offsets;
+}
+
+/** Case-insensitive search through a range tree's labels and values. */
+export function findLegendMatches(ranges: ByteRange[], query: string): ByteRange[] {
+  const q = query.toLowerCase();
+  const result: ByteRange[] = [];
+  function walk(range: ByteRange): void {
+    if (range.label.toLowerCase().includes(q) || valueStr(range).toLowerCase().includes(q)) {
+      result.push(range);
+    }
+    if (range.kind === "group") for (const child of range.children) walk(child);
+  }
+  for (const range of ranges) walk(range);
+  return result;
+}
+
 // ── Color utilities ────────────────────────────────────────────────────────────
 
 /**
@@ -126,7 +153,14 @@ export interface HexViewHandle extends ViewerHandle {
   updateColorMap(ranges: ColoredRange[]): void;
   onClickRange: ((range: ByteRange) => void) | null;
   scrollToOffset(offset: number): void;
-  setSearchState(offsets: number[], queryLen: number, activeIdx: number): void;
+  /** groups: one entry per search mode (hex / ascii); activeStart = -1 for no active match. */
+  setSearchState(
+    groups: ReadonlyArray<{ readonly offsets: ReadonlyArray<number>; readonly len: number }>,
+    activeStart: number,
+    activeLen: number,
+  ): void;
+  /** Highlight address column spans. activeOffset = -1 for no active match. */
+  setAddressHighlights(offsets: number[], activeOffset: number): void;
 }
 
 // ── Formatters ────────────────────────────────────────────────────────────────

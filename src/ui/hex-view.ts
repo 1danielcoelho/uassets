@@ -22,34 +22,41 @@ function rowHtml(
   bytes: Uint8Array,
   colorMap: ColoredRange[],
   bytesPerRow: number,
-  smOffsets: number[],
-  smLen: number,
+  smGroups: ReadonlyArray<{ readonly offsets: ReadonlyArray<number>; readonly len: number }>,
   smActiveStart: number,
+  smActiveLen: number,
+  addrOffsets: ReadonlySet<number>,
+  activeAddrOffset: number,
 ): string {
   const rowStart = rowIndex * bytesPerRow;
   const rowEnd   = Math.min(rowStart + bytesPerRow, bytes.length);
   const addr     = "0x" + rowStart.toString(16).padStart(8, "0");
   const half     = bytesPerRow >>> 1;
 
+  let addrStyle = "";
+  if (rowStart === activeAddrOffset) {
+    addrStyle = ` style="background:#ffee55;border-radius:2px;color:#111"`;
+  } else if (addrOffsets.has(rowStart)) {
+    addrStyle = ` style="background:#ffffff;border-radius:2px;color:#111"`;
+  }
+
   let hexPart   = "";
   let asciiPart = "";
 
   // Track the current colored range across columns to avoid one binary search per byte.
-  // We only re-query when the current offset exits the cached range.
   let cr: ReturnType<typeof colorForByte> = null;
 
-  // Two-pointer for search matches: find first match that could overlap this row.
-  // A match at start S with length smLen overlaps [rowStart, rowEnd) if S + smLen > rowStart.
-  let smPtr = smOffsets.length; // default: no matches
-  if (smLen > 0 && smOffsets.length > 0) {
-    const minStart = rowStart - smLen + 1;
-    let lo = 0, hi = smOffsets.length;
+  // Per-group two-pointers: binary-search to the first match that could overlap this row.
+  const ptrs = smGroups.map(g => {
+    if (g.len <= 0 || g.offsets.length === 0) return g.offsets.length;
+    const minStart = rowStart - g.len + 1;
+    let lo = 0, hi = g.offsets.length;
     while (lo < hi) {
       const mid = (lo + hi) >>> 1;
-      if ((smOffsets[mid] as number) < minStart) lo = mid + 1; else hi = mid;
+      if ((g.offsets[mid] as number) < minStart) lo = mid + 1; else hi = mid;
     }
-    smPtr = lo;
-  }
+    return lo;
+  });
 
   for (let col = 0; col < bytesPerRow; col++) {
     const offset = rowStart + col;
@@ -60,12 +67,17 @@ function rowHtml(
       cr = null;
     }
 
-    // Advance search pointer past matches that ended before this offset.
-    if (smLen > 0) {
-      while (smPtr < smOffsets.length && (smOffsets[smPtr] as number) + smLen <= offset) smPtr++;
+    // Check each match group; a byte is "matched" if it falls within any group's match.
+    let isMatch = false;
+    for (let gi = 0; gi < smGroups.length; gi++) {
+      const g = smGroups[gi]!;
+      let p = ptrs[gi]!;
+      while (p < g.offsets.length && (g.offsets[p] as number) + g.len <= offset) p++;
+      ptrs[gi] = p;
+      if (p < g.offsets.length && (g.offsets[p] as number) <= offset) isMatch = true;
     }
-    const isMatch  = smLen > 0 && smPtr < smOffsets.length && (smOffsets[smPtr] as number) <= offset;
-    const isActive = isMatch && (smOffsets[smPtr] as number) === smActiveStart;
+    // "Active" = the currently-navigated match covers this offset.
+    const isActive = smActiveStart >= 0 && offset >= smActiveStart && offset < smActiveStart + smActiveLen;
 
     const rAttr  = cr ? ` data-byteoffset="${cr.start}"` : "";
     const midCls = col === half - 1 ? " mid" : "";
@@ -75,25 +87,21 @@ function rowHtml(
       const hex  = byte.toString(16).padStart(2, "0").toUpperCase();
       const chr  = (byte >= 32 && byte < 127) ? escHtml(String.fromCharCode(byte)) : "·";
 
+      // Both hex and ASCII columns always show search highlights.
+      let cellStyle = "";
       if (isActive) {
-        const s = ` style="background:#ffee55;border-radius:0px;color:#111"`;
-        hexPart   += `<span class="b${midCls}"${rAttr}${s}>${hex}</span>`;
-        asciiPart += `<span class="c"${rAttr}${s}>${chr}</span>`;
+        cellStyle = ` style="background:#ffee55;border-radius:0px;color:#111"`;
       } else if (isMatch) {
-        const s = ` style="background:#ffffff;border-radius:0px;color:#111"`;
-        hexPart   += `<span class="b${midCls}"${rAttr}${s}>${hex}</span>`;
-        asciiPart += `<span class="c"${rAttr}${s}>${chr}</span>`;
+        cellStyle = ` style="background:#ffffff;border-radius:0px;color:#111"`;
       } else if (cr) {
-        const hexShadow = `;box-shadow:2px 0 0 ${cr.color}`;
-        const hexBg = ` style="background:${cr.color};border-radius:0px${hexShadow}"`;
-        const asciiBg = ` style="background:${cr.color};border-radius:0px"`;
-
-        hexPart   += `<span class="b${midCls}"${rAttr}${hexBg}>${hex}</span>`;
-        asciiPart += `<span class="c"${rAttr}${asciiBg}>${chr}</span>`;
-      } else {
-        hexPart   += `<span class="b${midCls}"${rAttr}>${hex}</span>`;
-        asciiPart += `<span class="c"${rAttr}>${chr}</span>`;
+        cellStyle = ` style="background:${cr.color};border-radius:0px"`;
       }
+      const hexStyle = (!isActive && !isMatch && cr)
+        ? ` style="background:${cr.color};border-radius:0px;box-shadow:2px 0 0 ${cr.color}"`
+        : cellStyle;
+
+      hexPart   += `<span class="b${midCls}"${rAttr}${hexStyle}>${hex}</span>`;
+      asciiPart += `<span class="c"${rAttr}${cellStyle}>${chr}</span>`;
     } else {
       hexPart   += `<span class="b${midCls}">  </span>`;
       asciiPart += `<span class="c"> </span>`;
@@ -102,7 +110,7 @@ function rowHtml(
 
   return (
     `<div class="hex-row">` +
-    `<span class="addr">${addr}</span>` +
+    `<span class="addr"${addrStyle}>${addr}</span>` +
     `<span class="bytes">${hexPart}</span>` +
     `<span class="ascii">${asciiPart}</span>` +
     `</div>`
@@ -129,9 +137,11 @@ export function initHexView(
   const bytesPerRow = options.bytesPerRow;
 
   // ── Search state ─────────────────────────────────────────────────────────
-  let smOffsets: number[] = [];
-  let smLen    = 0;
-  let smActive = -1;
+  let smGroups:     ReadonlyArray<{ readonly offsets: ReadonlyArray<number>; readonly len: number }> = [];
+  let smActiveStart = -1; // byte offset of the active match, or -1
+  let smActiveLen   = 0;
+  let smAddrOffsets:      Set<number> = new Set();
+  let smActiveAddrOffset              = -1;
   const totalRows = Math.ceil(parsedAsset.totalBytes / bytesPerRow);
   const totalHeight = totalRows * ROW_HEIGHT;
 
@@ -194,13 +204,9 @@ export function initHexView(
     const lastRow = Math.min(totalRows, firstRow + viewportRows + OVERSCAN * 2);
     rowsEl.style.top = `${firstRow * ROW_HEIGHT}px`;
 
-    const smActiveStart = smActive >= 0 && smActive < smOffsets.length
-      ? (smOffsets[smActive] as number)
-      : -1;
-
     let html = "";
     for (let r = firstRow; r < lastRow; r++) {
-      html += rowHtml(r, fileBytesArray, colorMap, bytesPerRow, smOffsets, smLen, smActiveStart);
+      html += rowHtml(r, fileBytesArray, colorMap, bytesPerRow, smGroups, smActiveStart, smActiveLen, smAddrOffsets, smActiveAddrOffset);
     }
     rowsEl.innerHTML = html;
     lastHoveredEls = []; // stale refs after DOM rebuild
@@ -268,10 +274,21 @@ export function initHexView(
       applyHoveredClass();
     },
 
-    setSearchState(offsets: number[], queryLen: number, activeIdx: number): void {
-      smOffsets = offsets;
-      smLen     = queryLen;
-      smActive  = activeIdx;
+    setSearchState(
+      groups: ReadonlyArray<{ readonly offsets: ReadonlyArray<number>; readonly len: number }>,
+      activeStart: number,
+      activeLen: number,
+    ): void {
+      smGroups      = groups;
+      smActiveStart = activeStart;
+      smActiveLen   = activeLen;
+      mapVersion++;
+      renderWindow();
+    },
+
+    setAddressHighlights(offsets: number[], activeOffset: number): void {
+      smAddrOffsets      = new Set(offsets);
+      smActiveAddrOffset = activeOffset;
       mapVersion++;
       renderWindow();
     },

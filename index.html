@@ -311,19 +311,42 @@
         vertical-align: middle;
       }
 
-      /* ── Search bar ── */
+      /* ── Legend column header ── */
+      #legend-col-header {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        height: 28px;
+        flex-shrink: 0;
+        background: #1e1e1e;
+        border-bottom: 1px solid #272727;
+        font-size: 10px;
+        color: #555;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        user-select: none;
+      }
+
+      /* ── Search bar (floating popup) ── */
       #search-bar {
+        position: fixed;
+        top: 38px;
+        right: 10px;
+        z-index: 200;
         display: flex;
         align-items: center;
         gap: 6px;
-        height: 32px;
-        flex-shrink: 0;
-        background: #252525;
-        border-bottom: 1px solid #3e3e3e;
-        padding: 0 12px;
+        min-width: 540px;
+        background: #2a2a2a;
+        border: 1px solid #484848;
+        border-radius: 6px;
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.55);
+        padding: 5px 8px;
       }
 
       #search-bar[hidden] { display: none; }
+
+      #search-spacer { flex: 1; min-width: 16px; }
 
       #search-input {
         flex: 0 1 280px;
@@ -343,7 +366,8 @@
       #search-count {
         color: #666;
         font-size: 11px;
-        min-width: 52px;
+        min-width: 72px;
+        white-space: nowrap;
         text-align: right;
       }
 
@@ -361,7 +385,7 @@
       .search-btn:hover:not(:disabled) { background: #3a3a3a; }
       .search-btn:disabled { opacity: 0.35; cursor: default; }
 
-      .search-mode-label {
+      .search-chk-label {
         color: #999;
         font-size: 11px;
         cursor: pointer;
@@ -370,6 +394,16 @@
         align-items: center;
         gap: 4px;
       }
+
+      /* ── Legend search highlights ── */
+      .legend-row.legend-search-match { background: #ffffff !important; }
+      .legend-row.legend-search-match .legend-name,
+      .legend-row.legend-search-match .legend-value,
+      .legend-row.legend-search-match .legend-size { color: #111; }
+      .legend-row.legend-search-active { background: #ffee55 !important; }
+      .legend-row.legend-search-active .legend-name,
+      .legend-row.legend-search-active .legend-value,
+      .legend-row.legend-search-active .legend-size { color: #111; }
 
       /* ── Hover sync ── */
 
@@ -403,22 +437,25 @@
     <div id="content">
       <div id="hex-column">
         <div id="hex-col-header"></div>
-        <div id="search-bar" hidden>
-          <input id="search-input" type="text" placeholder="Search text or hex bytes…" autocomplete="off" spellcheck="false">
-          <span id="search-count"></span>
-          <button class="search-btn" id="search-prev" title="Previous (Shift+Enter)" disabled>◄</button>
-          <button class="search-btn" id="search-next" title="Next (Enter)" disabled>►</button>
-          <label class="search-mode-label" title="Search raw hex bytes (e.g. 9E 2A 83 C1)">
-            <input type="checkbox" id="search-mode-hex"> Hex
-          </label>
-          <button class="search-btn" id="search-close" title="Close (Escape)">✕</button>
-        </div>
         <div id="hex-panel"><span class="placeholder">Drop a .uasset/.umap file or use File → Open</span></div>
       </div>
       <div id="right-panel">
         <div id="summary-panel"><span class="placeholder">No file loaded</span></div>
+        <div id="legend-col-header">Legend</div>
         <div id="legend-panel"></div>
       </div>
+    </div>
+    <div id="search-bar" hidden>
+      <input id="search-input" type="text" placeholder="Search…" autocomplete="off" spellcheck="false">
+      <span id="search-count"></span>
+      <button class="search-btn" id="search-prev" title="Previous (Shift+Enter)" disabled>◄</button>
+      <button class="search-btn" id="search-next" title="Next (Enter)" disabled>►</button>
+      <label class="search-chk-label"><input type="checkbox" id="search-chk-hex" checked> Hex</label>
+      <label class="search-chk-label"><input type="checkbox" id="search-chk-ascii" checked> ASCII</label>
+      <label class="search-chk-label"><input type="checkbox" id="search-chk-addr"> Addr</label>
+      <label class="search-chk-label"><input type="checkbox" id="search-chk-legend"> Legend</label>
+      <span id="search-spacer"></span>
+      <button class="search-btn" id="search-close" title="Close (Escape)">✕</button>
     </div>
     <script type="module" src="./src/ui/app.ts"></script>
   </body>

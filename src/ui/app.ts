@@ -1,9 +1,9 @@
-import type { ParseResult } from "../types.ts";
+import type { ParseResult, ByteRange } from "../types.ts";
 import { DEFAULT_OPTIONS } from "../types.ts";
 import { parseUAsset } from "../parser/parser.ts";
 import { initHexView } from "./hex-view.ts";
-import { initLegend } from "./legend.ts";
-import { formatSize, escHtml, findMatches, type HexViewHandle, type SearchMode } from "./utils.ts";
+import { initLegend, type LegendHandle } from "./legend.ts";
+import { formatSize, escHtml, findMatches, findLegendMatches, findAddressMatches, type HexViewHandle } from "./utils.ts";
 
 // ── Elements ──────────────────────────────────────────────────────────────────
 
@@ -17,13 +17,16 @@ const menuFileOpen = document.getElementById("menu-file-open")!;
 
 // ── Search elements ───────────────────────────────────────────────────────────
 
-const searchBar     = document.getElementById("search-bar") as HTMLElement;
-const searchInput   = document.getElementById("search-input") as HTMLInputElement;
-const searchCount   = document.getElementById("search-count")!;
-const searchPrev    = document.getElementById("search-prev") as HTMLButtonElement;
-const searchNext    = document.getElementById("search-next") as HTMLButtonElement;
-const searchModeHex = document.getElementById("search-mode-hex") as HTMLInputElement;
-const searchClose   = document.getElementById("search-close")!;
+const searchBar    = document.getElementById("search-bar") as HTMLElement;
+const searchInput  = document.getElementById("search-input") as HTMLInputElement;
+const searchCount  = document.getElementById("search-count")!;
+const searchPrev   = document.getElementById("search-prev") as HTMLButtonElement;
+const searchNext   = document.getElementById("search-next") as HTMLButtonElement;
+const chkHex       = document.getElementById("search-chk-hex") as HTMLInputElement;
+const chkAscii     = document.getElementById("search-chk-ascii") as HTMLInputElement;
+const chkAddr      = document.getElementById("search-chk-addr") as HTMLInputElement;
+const chkLegend    = document.getElementById("search-chk-legend") as HTMLInputElement;
+const searchClose  = document.getElementById("search-close")!;
 
 // ── File input ────────────────────────────────────────────────────────────────
 
@@ -66,64 +69,151 @@ document.addEventListener("drop", (e) => {
 
 // ── Search state ──────────────────────────────────────────────────────────────
 
-let fileBytes: Uint8Array | null = null;
-let hexHandle: HexViewHandle | null = null;
-let searchOffsets: number[] = [];
-let searchLen     = 0;
-let searchActive  = -1;
+type SearchMatchItem =
+  | { kind: "byte";    offset: number; len: number }
+  | { kind: "address"; offset: number }
+  | { kind: "legend";  range: ByteRange };
+
+let fileBytes:         Uint8Array | null  = null;
+let hexHandle:         HexViewHandle | null = null;
+let legendHandle:      LegendHandle | null  = null;
+let allRanges:         ByteRange[]          = [];
+
+let allMatches:        SearchMatchItem[] = [];
+let searchActive       = -1;
+let byteMatchGroups:   Array<{ offsets: number[]; len: number }> = [];
+let addressOffsets:    number[]    = [];
+let legendMatchRanges: ByteRange[] = [];
 
 function runSearch(): void {
-  if (!fileBytes || !hexHandle) return;
   const query = searchInput.value;
-  const mode: SearchMode = searchModeHex.checked ? "hex" : "text";
 
-  const result = query ? findMatches(fileBytes, query, mode) : { offsets: [], queryLen: 0 };
-  searchOffsets = result.offsets;
-  searchLen     = result.queryLen;
-  searchActive  = searchOffsets.length > 0 ? 0 : -1;
-
-  hexHandle.setSearchState(searchOffsets, searchLen, searchActive);
-  updateSearchUI(query);
-
-  if (searchActive >= 0) {
-    hexHandle.scrollToOffset(searchOffsets[searchActive]!);
+  // Byte search: Hex mode (query as hex bytes) and/or ASCII mode (query as UTF-8 text)
+  byteMatchGroups = [];
+  if (fileBytes && query) {
+    if (chkHex.checked) {
+      const res = findMatches(fileBytes, query, "hex");
+      if (res.queryLen > 0) byteMatchGroups.push({ offsets: res.offsets, len: res.queryLen });
+    }
+    if (chkAscii.checked) {
+      const res = findMatches(fileBytes, query, "text");
+      if (res.queryLen > 0) byteMatchGroups.push({ offsets: res.offsets, len: res.queryLen });
+    }
   }
+
+  // Address search
+  addressOffsets = [];
+  if (chkAddr.checked && fileBytes && query) {
+    addressOffsets = findAddressMatches(fileBytes.length, DEFAULT_OPTIONS.bytesPerRow, query);
+  }
+
+  // Legend search
+  legendMatchRanges = [];
+  if (chkLegend.checked && query) {
+    legendMatchRanges = findLegendMatches(allRanges, query);
+  }
+
+  // Byte navigation entries sorted by offset (both modes interleaved)
+  const byteNavMatches: SearchMatchItem[] = byteMatchGroups
+    .flatMap(g => g.offsets.map(o => ({ kind: "byte" as const, offset: o, len: g.len })))
+    .sort((a, b) => a.offset - b.offset);
+
+  // Combined list: byte matches first, then address matches, then legend matches
+  allMatches = [
+    ...byteNavMatches,
+    ...addressOffsets.map(o => ({ kind: "address" as const, offset: o })),
+    ...legendMatchRanges.map(r => ({ kind: "legend" as const, range: r })),
+  ];
+
+  searchActive = allMatches.length > 0 ? 0 : -1;
+  applySearchState();
+  updateSearchUI(query);
+  if (searchActive >= 0) jumpToMatch(searchActive);
 }
 
 function goToMatch(delta: number): void {
-  if (searchOffsets.length === 0 || !hexHandle) return;
-  searchActive = ((searchActive + delta) % searchOffsets.length + searchOffsets.length) % searchOffsets.length;
-  hexHandle.setSearchState(searchOffsets, searchLen, searchActive);
-  hexHandle.scrollToOffset(searchOffsets[searchActive]!);
+  if (allMatches.length === 0) return;
+  searchActive = ((searchActive + delta) % allMatches.length + allMatches.length) % allMatches.length;
+  applySearchState();
+  jumpToMatch(searchActive);
   updateSearchUI(searchInput.value);
 }
 
+function applySearchState(): void {
+  const m = searchActive >= 0 ? allMatches[searchActive] : null;
+  const activeByteOffset  = m?.kind === "byte"    ? m.offset : -1;
+  const activeByteLen     = m?.kind === "byte"    ? m.len    : 0;
+  const activeAddrOffset  = m?.kind === "address" ? m.offset : -1;
+  const activeLegendRange = m?.kind === "legend"  ? m.range  : null;
+
+  hexHandle?.setSearchState(byteMatchGroups, activeByteOffset, activeByteLen);
+  hexHandle?.setAddressHighlights(addressOffsets, activeAddrOffset);
+  legendHandle?.setSearchResults(legendMatchRanges, activeLegendRange);
+}
+
+function findDeepestRangeAtOffset(ranges: ByteRange[], offset: number): ByteRange | null {
+  for (const range of ranges) {
+    if (offset >= range.start && offset < range.end) {
+      if (range.kind === "group" && range.children.length > 0) {
+        const child = findDeepestRangeAtOffset(range.children, offset);
+        if (child) return child;
+      }
+      return range;
+    }
+  }
+  return null;
+}
+
+function jumpToMatch(idx: number): void {
+  const m = allMatches[idx];
+  if (!m) return;
+  if (m.kind === "byte" || m.kind === "address") {
+    hexHandle?.scrollToOffset(m.offset);
+    if (legendHandle) {
+      const range = findDeepestRangeAtOffset(allRanges, m.offset);
+      if (range) legendHandle.expandAndScrollToRange(range);
+    }
+  } else {
+    legendHandle?.expandAndScrollToRange(m.range);
+    hexHandle?.scrollToOffset(m.range.start);
+  }
+}
+
 function updateSearchUI(query: string): void {
-  if (searchOffsets.length === 0) {
+  if (allMatches.length === 0) {
     searchCount.textContent = query ? "0 matches" : "";
     searchInput.classList.toggle("no-match", !!query);
   } else {
-    searchCount.textContent = `${searchActive + 1} / ${searchOffsets.length}`;
+    searchCount.textContent = `${searchActive + 1} / ${allMatches.length}`;
     searchInput.classList.remove("no-match");
   }
-  searchPrev.disabled = searchOffsets.length === 0;
-  searchNext.disabled = searchOffsets.length === 0;
+  searchPrev.disabled = allMatches.length === 0;
+  searchNext.disabled = allMatches.length === 0;
+}
+
+function clearSearchState(): void {
+  allMatches        = [];
+  byteMatchGroups   = [];
+  addressOffsets    = [];
+  legendMatchRanges = [];
+  searchActive      = -1;
+  searchInput.classList.remove("no-match");
+  searchCount.textContent = "";
 }
 
 function showSearch(): void {
   searchBar.hidden = false;
   searchInput.focus();
   searchInput.select();
+  applySearchState();
+  updateSearchUI(searchInput.value);
 }
 
 function hideSearch(): void {
   searchBar.hidden = true;
-  searchInput.classList.remove("no-match");
-  if (hexHandle) hexHandle.setSearchState([], 0, -1);
-  searchOffsets = [];
-  searchLen     = 0;
-  searchActive  = -1;
-  searchCount.textContent = "";
+  hexHandle?.setSearchState([], -1, 0);
+  hexHandle?.setAddressHighlights([], -1);
+  legendHandle?.setSearchResults([], null);
 }
 
 searchInput.addEventListener("input", runSearch);
@@ -135,13 +225,25 @@ searchInput.addEventListener("keydown", (e) => {
 
 searchPrev.addEventListener("click", () => goToMatch(-1));
 searchNext.addEventListener("click", () => goToMatch(1));
-searchModeHex.addEventListener("change", runSearch);
+chkHex.addEventListener("change", runSearch);
+chkAscii.addEventListener("change", runSearch);
+chkAddr.addEventListener("change", runSearch);
+chkLegend.addEventListener("change", runSearch);
 searchClose.addEventListener("click", hideSearch);
 
 document.addEventListener("keydown", (e) => {
   if ((e.ctrlKey || e.metaKey) && e.key === "f") {
     e.preventDefault();
     showSearch();
+  }
+  if ((e.ctrlKey || e.metaKey) && e.key === "g") {
+    e.preventDefault();
+    chkHex.checked    = false;
+    chkAscii.checked  = false;
+    chkAddr.checked   = true;
+    chkLegend.checked = false;
+    showSearch();
+    runSearch();
   }
   if (e.key === "Escape" && !searchBar.hidden) {
     hideSearch();
@@ -166,32 +268,32 @@ async function openFile(file: File): Promise<void> {
   }
 
   // Reset search state for the new file.
-  fileBytes = new Uint8Array(buffer);
+  fileBytes  = new Uint8Array(buffer);
+  allRanges  = result.ranges;
   hideSearch();
+  clearSearchState();
   searchInput.value = "";
 
   renderSummary(result, file);
-  hexHandle   = initHexView(hexPanel, hexColHeader, buffer, result, DEFAULT_OPTIONS);
-  const legendView = initLegend(legendPanel, result.ranges, hexHandle.updateColorMap);
+  hexHandle    = initHexView(hexPanel, hexColHeader, buffer, result, DEFAULT_OPTIONS);
+  legendHandle = initLegend(legendPanel, result.ranges, hexHandle.updateColorMap);
 
-  // Cross-wire hover sync: each component calls the other's setHovered when the user
-  // interacts with it, but setHovered itself never calls onHoverChange to avoid loops.
-  hexHandle.onHoverChange    = legendView.setHovered.bind(legendView);
-  legendView.onHoverChange   = hexHandle.setHovered.bind(hexHandle);
+  // Cross-wire hover sync.
+  hexHandle.onHoverChange    = legendHandle.setHovered.bind(legendHandle);
+  legendHandle.onHoverChange = hexHandle.setHovered.bind(hexHandle);
 
   // Hex click → expand group in legend (if applicable) then scroll legend to that row.
   hexHandle.onClickRange = (range) => {
-    legendView.expandRange(range);
-    legendView.scrollToRange(range);
+    legendHandle!.expandRange(range);
+    legendHandle!.scrollToRange(range);
   };
 
   // Legend click → scroll hex view to that range's start offset.
-  legendView.onClickRange = (range) => hexHandle!.scrollToOffset(range.start);
+  legendHandle.onClickRange = (range) => hexHandle!.scrollToOffset(range.start);
 }
 
 // ── Summary panel ─────────────────────────────────────────────────────────────
 
-// Track the current thumbnail object URL so we can revoke it when a new file is loaded.
 let currentThumbUrl: string | null = null;
 
 function renderSummary(result: ParseResult, file: File): void {
@@ -211,16 +313,14 @@ function renderSummary(result: ParseResult, file: File): void {
     ...summary.properties.map(p => metaLine(p.label, p.value)),
   ].join("");
 
-  // Revoke any previous blob URL to free memory.
   if (currentThumbUrl) { URL.revokeObjectURL(currentThumbUrl); currentThumbUrl = null; }
 
   if (summary.thumbnail) {
-    const blob = new Blob([summary.thumbnail.data], { type: summary.thumbnail.mimeType });
+    const blob = new Blob([summary.thumbnail.data.buffer.slice(0) as ArrayBuffer], { type: summary.thumbnail.mimeType });
     currentThumbUrl = URL.createObjectURL(blob);
     const { width, height } = summary.thumbnail;
     const thumbHtml = `<img class="summary-thumb" src="${currentThumbUrl}" ` +
                            `alt="Thumbnail ${width}×${height}" title="${width}×${height}">`;
-    // Insert thumbnail after the first element (the filename/asset-class div)
     const splitIdx = textHtml.indexOf("</div>") + "</div>".length;
     summaryPanel.innerHTML = textHtml.slice(0, splitIdx) + thumbHtml + textHtml.slice(splitIdx);
   } else {
