@@ -146,8 +146,7 @@ function applySearchState(): void {
   const activeAddrOffset  = m?.kind === "address" ? m.offset : -1;
   const activeLegendRange = m?.kind === "legend"  ? m.range  : null;
 
-  hexHandle?.setSearchState(byteMatchGroups, activeByteOffset, activeByteLen);
-  hexHandle?.setAddressHighlights(addressOffsets, activeAddrOffset);
+  hexHandle?.setSearchHighlights(byteMatchGroups, activeByteOffset, activeByteLen, addressOffsets, activeAddrOffset);
   legendHandle?.setSearchResults(legendMatchRanges, activeLegendRange);
 }
 
@@ -211,12 +210,15 @@ function showSearch(): void {
 
 function hideSearch(): void {
   searchBar.hidden = true;
-  hexHandle?.setSearchState([], -1, 0);
-  hexHandle?.setAddressHighlights([], -1);
+  hexHandle?.setSearchHighlights([], -1, 0, [], -1);
   legendHandle?.setSearchResults([], null);
 }
 
-searchInput.addEventListener("input", runSearch);
+let searchDebounceTimer = 0;
+searchInput.addEventListener("input", () => {
+  clearTimeout(searchDebounceTimer);
+  searchDebounceTimer = setTimeout(runSearch, 150) as unknown as number;
+});
 
 searchInput.addEventListener("keydown", (e) => {
   if (e.key === "Enter") { e.preventDefault(); goToMatch(e.shiftKey ? -1 : 1); }

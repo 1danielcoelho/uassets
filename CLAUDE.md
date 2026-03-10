@@ -161,7 +161,8 @@ The parser is fully refactored and all 6 test assets pass (6/6).
 ## Next steps
 
 - **Resizeable divider** — Between the hex view and the legend view
-- **Example assets** — Instead of just placeholder text, show buttons for easily opening an example
+- **Example assets** — Instead of just placeholder text, show buttons for easily opening example assets, so maybe have it say something like "File -> Open to open a .uasset file or click one of these examples:" and have some buttons after it for SM_Cube.uasset and the other samples
+- **Hunt for the missing annotation** — If you look at the parsed output for SM_Cube.uasset (and the other assets), you'll find segments without annotation. For example before the imports table there seems to be some kind of ASCII GUID and some other bytes. Each Export of the export table, when expanded in the UI, also shows mostly unannotated bytes, only displaying a handful of the 112 bytes as annotated. What are the other bytes in these cases? Surely they mean something. Another example is the big segment between `Exports Footer Tag` and the `Asset Registry Dependency D..` (can't see the full text in the UI). There are a bunch of bytes there. What are those? So the goal for this section is to perform this task and catalog all the missing bytes you can find. The UE source code is here, it should be possible to annotate every single byte. Note that you still don't need to dive into asset-specific stuff just yet (like UStaticMesh-specific mesh data for example)
 
 ## Polishing steps
 

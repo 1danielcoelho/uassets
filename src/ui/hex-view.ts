@@ -274,21 +274,18 @@ export function initHexView(
       applyHoveredClass();
     },
 
-    setSearchState(
+    setSearchHighlights(
       groups: ReadonlyArray<{ readonly offsets: ReadonlyArray<number>; readonly len: number }>,
-      activeStart: number,
-      activeLen: number,
+      activeByteStart: number,
+      activeByteLen: number,
+      addrOffsets: number[],
+      activeAddrOffset: number,
     ): void {
-      smGroups      = groups;
-      smActiveStart = activeStart;
-      smActiveLen   = activeLen;
-      mapVersion++;
-      renderWindow();
-    },
-
-    setAddressHighlights(offsets: number[], activeOffset: number): void {
-      smAddrOffsets      = new Set(offsets);
-      smActiveAddrOffset = activeOffset;
+      smGroups           = groups;
+      smActiveStart      = activeByteStart;
+      smActiveLen        = activeByteLen;
+      smAddrOffsets      = new Set(addrOffsets);
+      smActiveAddrOffset = activeAddrOffset;
       mapVersion++;
       renderWindow();
     },

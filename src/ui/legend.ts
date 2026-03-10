@@ -153,7 +153,7 @@ export function initLegend(
         const tr = rangeToTr.get(activeRange);
         if (tr) {
           tr.classList.add("legend-search-active");
-          if (!searchHighlightedTrs.includes(tr)) searchHighlightedTrs.push(tr);
+          searchHighlightedTrs.push(tr);
         }
       }
     },

@@ -153,14 +153,18 @@ export interface HexViewHandle extends ViewerHandle {
   updateColorMap(ranges: ColoredRange[]): void;
   onClickRange: ((range: ByteRange) => void) | null;
   scrollToOffset(offset: number): void;
-  /** groups: one entry per search mode (hex / ascii); activeStart = -1 for no active match. */
-  setSearchState(
+  /**
+   * Set all search highlight state at once.
+   * groups: one entry per search mode (hex / ascii); activeByteStart = -1 for no active byte match.
+   * addrOffsets: row-start offsets to highlight in the address column; activeAddrOffset = -1 for none.
+   */
+  setSearchHighlights(
     groups: ReadonlyArray<{ readonly offsets: ReadonlyArray<number>; readonly len: number }>,
-    activeStart: number,
-    activeLen: number,
+    activeByteStart: number,
+    activeByteLen: number,
+    addrOffsets: number[],
+    activeAddrOffset: number,
   ): void;
-  /** Highlight address column spans. activeOffset = -1 for no active match. */
-  setAddressHighlights(offsets: number[], activeOffset: number): void;
 }
 
 // ── Formatters ────────────────────────────────────────────────────────────────
