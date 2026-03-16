@@ -278,11 +278,24 @@ export function initHexView(
     handle.onDblClickRange?.(cr.range);
   }, { signal });
 
+  // ── Right-click handler ───────────────────────────────────────────────────
+  container.addEventListener("contextmenu", (e) => {
+    const target = e.target as HTMLElement;
+    if (!target.classList.contains("b") && !target.classList.contains("c")) return;
+    const offsetStr = target.getAttribute("data-byteoffset");
+    if (offsetStr === null) return;
+    const cr = colorForByte(Number(offsetStr), colorMap);
+    if (!cr) return;
+    e.preventDefault();
+    handle.onContextMenuRange?.(cr.range, e.clientX, e.clientY);
+  }, { signal });
+
   // ── Handle ───────────────────────────────────────────────────────────────
   const handle: HexViewHandle = {
     onHoverChange: null,
     onClickRange: null,
     onDblClickRange: null,
+    onContextMenuRange: null,
 
     updateColorMap(ranges: ColoredRange[]): void {
       colorMap = ranges;

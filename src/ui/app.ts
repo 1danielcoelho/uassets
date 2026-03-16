@@ -301,8 +301,15 @@ async function openFile(file: File): Promise<void> {
     annotationHandle!.expandAndScrollToRange(range);
   };
 
-  // Annotation right-click → context menu → "Scroll hex to range" fires onClickRange.
+  // Annotation right-click → context menu → "View bytes" fires onClickRange.
   annotationHandle.onClickRange = (range) => hexHandle!.scrollToOffset(range.start);
+
+  // Hex right-click → shared context menu with "View annotation" as primary action.
+  hexHandle.onContextMenuRange = (range, x, y) => {
+    annotationHandle!.showContextMenuAt(range, x, y, "View annotation", () => {
+      annotationHandle!.scrollToNearestVisible(range);
+    });
+  };
 }
 
 // ── Summary panel ─────────────────────────────────────────────────────────────

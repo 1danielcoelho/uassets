@@ -17,7 +17,11 @@ export interface AnnotationHandle extends ViewerHandle {
   collapseAll(): void;
   scrollToRange(range: ByteRange): void;
   expandAndScrollToRange(range: ByteRange): void;
+  /** Scroll to the deepest ancestor of range that is currently visible (no expansion). */
+  scrollToNearestVisible(range: ByteRange): void;
   setSearchResults(matches: ByteRange[], activeRange: ByteRange | null): void;
+  /** Show the expand/collapse context menu at (x, y). The primary item uses the given label and action. */
+  showContextMenuAt(range: ByteRange, x: number, y: number, primaryLabel: string, onPrimary: () => void): void;
   onClickRange: ((range: ByteRange) => void) | null;
 }
 
@@ -81,6 +85,28 @@ export function initAnnotation(
   let hoveredRow: HTMLTableRowElement | null = null;
   let lastHoveredStart: number | null = null;
   let lastHoveredEnd:   number | null = null;
+
+  // ── Context menu state (shared across annotation + hex-view triggers) ──
+  const ctxMenu = document.createElement("div");
+  ctxMenu.id = "annotation-ctx-menu";
+  ctxMenu.className = "ctx-menu";
+  ctxMenu.innerHTML = `
+    <div class="ctx-menu-item" data-action="primary"></div>
+    <div class="ctx-menu-divider"></div>
+    <div class="ctx-menu-item" data-action="expand">Expand</div>
+    <div class="ctx-menu-item" data-action="expand-recursive">Expand recursively</div>
+    <div class="ctx-menu-item" data-action="collapse">Collapse</div>
+    <div class="ctx-menu-item" data-action="collapse-parent">Collapse parent</div>
+  `;
+  document.body.appendChild(ctxMenu);
+
+  const ctxItems = new Map<string, HTMLElement>();
+  for (const el of ctxMenu.querySelectorAll<HTMLElement>(".ctx-menu-item")) {
+    ctxItems.set(el.dataset["action"]!, el);
+  }
+
+  let ctxMenuRange: ByteRange | null = null;
+  let ctxOnPrimary: (() => void) | null = null;
 
   const handle: AnnotationHandle = {
     onHoverChange: null,
@@ -185,6 +211,42 @@ export function initAnnotation(
       handle.scrollToRange(range);
     },
 
+    scrollToNearestVisible(range: ByteRange): void {
+      // Walk from range toward root; stop at the first row that is currently visible.
+      let cur: ByteRange | undefined = range;
+      while (cur !== undefined) {
+        const tr = rangeToTr.get(cur);
+        if (tr && tr.style.display !== "none") {
+          handle.scrollToRange(cur);
+          return;
+        }
+        cur = rangeToParent.get(cur);
+      }
+    },
+
+    showContextMenuAt(range: ByteRange, x: number, y: number, primaryLabel: string, onPrimary: () => void): void {
+      ctxMenuRange = range;
+      ctxOnPrimary = onPrimary;
+      ctxItems.get("primary")!.textContent = primaryLabel;
+
+      const isGroup    = range.kind === "group";
+      const info       = rangeToRowInfo.get(range);
+      const isExpanded = isGroup && info !== undefined && info.directChildRows[0]?.style.display !== "none";
+      const hasParent  = rangeToParent.has(range);
+
+      const setDisabled = (action: string, disabled: boolean) =>
+        ctxItems.get(action)?.classList.toggle("disabled", disabled);
+
+      setDisabled("expand",           !isGroup || isExpanded);
+      setDisabled("expand-recursive", !isGroup);
+      setDisabled("collapse",         !isGroup || !isExpanded);
+      setDisabled("collapse-parent",  !hasParent);
+
+      ctxMenu.style.left = `${x}px`;
+      ctxMenu.style.top  = `${y}px`;
+      ctxMenu.classList.add("visible");
+    },
+
     setSearchResults(matches: ByteRange[], activeRange: ByteRange | null): void {
       for (const tr of searchHighlightedTrs) {
         tr.classList.remove("annotation-search-match", "annotation-search-active");
@@ -217,65 +279,20 @@ export function initAnnotation(
     if (range) handle.toggleRange(range);
   });
 
-  // ── Context menu — right-click any row to get navigation options ──
-  const ctxMenu = document.createElement("div");
-  ctxMenu.id = "annotation-ctx-menu";
-  ctxMenu.className = "ctx-menu";
-  ctxMenu.innerHTML = `
-    <div class="ctx-menu-item" data-action="scroll-to">View bytes</div>
-    <div class="ctx-menu-divider"></div>
-    <div class="ctx-menu-item" data-action="expand">Expand</div>
-    <div class="ctx-menu-item" data-action="expand-recursive">Expand recursively</div>
-    <div class="ctx-menu-item" data-action="collapse">Collapse</div>
-    <div class="ctx-menu-item" data-action="collapse-parent">Collapse parent</div>
-  `;
-  document.body.appendChild(ctxMenu);
-
-  const ctxItems = new Map<string, HTMLElement>();
-  for (const el of ctxMenu.querySelectorAll<HTMLElement>(".ctx-menu-item")) {
-    ctxItems.set(el.dataset["action"]!, el);
-  }
-
-  let ctxMenuRange: ByteRange | null = null;
-
-  table.addEventListener("contextmenu", (e) => {
-    const tr = (e.target as HTMLElement).closest<HTMLTableRowElement>("tr[data-byteoffset]");
-    if (!tr) return;
-    e.preventDefault();
-    ctxMenuRange = trToRange.get(tr) ?? null;
-    if (!ctxMenuRange) return;
-
-    const r = ctxMenuRange;
-    const isGroup    = r.kind === "group";
-    const info       = rangeToRowInfo.get(r);
-    const isExpanded = isGroup && (info?.directChildRows[0]?.style.display !== "none" ?? false);
-    const hasParent  = rangeToParent.has(r);
-
-    const setDisabled = (action: string, disabled: boolean) =>
-      ctxItems.get(action)?.classList.toggle("disabled", disabled);
-
-    setDisabled("expand",           !isGroup || isExpanded);
-    setDisabled("expand-recursive", !isGroup);
-    setDisabled("collapse",         !isGroup || !isExpanded);
-    setDisabled("collapse-parent",  !hasParent);
-
-    ctxMenu.style.left = `${e.clientX}px`;
-    ctxMenu.style.top  = `${e.clientY}px`;
-    ctxMenu.classList.add("visible");
-  });
-
+  // ── Context menu click handler ──
   ctxMenu.addEventListener("click", (e) => {
     const item = (e.target as HTMLElement).closest<HTMLElement>(".ctx-menu-item");
     if (!item || item.classList.contains("disabled")) {
       ctxMenu.classList.remove("visible");
       ctxMenuRange = null;
+      ctxOnPrimary = null;
       return;
     }
     const r = ctxMenuRange;
     if (r) {
       switch (item.dataset["action"]) {
-        case "scroll-to":
-          handle.onClickRange?.(r);
+        case "primary":
+          ctxOnPrimary?.();
           break;
         case "expand":
           handle.expandRange(r);
@@ -301,7 +318,7 @@ export function initAnnotation(
           break;
         }
         case "collapse":
-          handle.toggleRange(r); // toggleRange collapses when expanded
+          handle.toggleRange(r);
           break;
         case "collapse-parent": {
           const parent = rangeToParent.get(r);
@@ -312,6 +329,7 @@ export function initAnnotation(
     }
     ctxMenu.classList.remove("visible");
     ctxMenuRange = null;
+    ctxOnPrimary = null;
   });
 
   window.addEventListener("click", (e) => {
@@ -319,6 +337,7 @@ export function initAnnotation(
     if (!ctxMenu.contains(e.target as Node)) {
       ctxMenu.classList.remove("visible");
       ctxMenuRange = null;
+      ctxOnPrimary = null;
     }
   }, { signal });
 
@@ -326,8 +345,19 @@ export function initAnnotation(
     if (e.key === "Escape" && ctxMenu.classList.contains("visible")) {
       ctxMenu.classList.remove("visible");
       ctxMenuRange = null;
+      ctxOnPrimary = null;
     }
   }, { signal });
+
+  // ── Annotation table contextmenu — "View bytes" as primary action ──
+  table.addEventListener("contextmenu", (e) => {
+    const tr = (e.target as HTMLElement).closest<HTMLTableRowElement>("tr[data-byteoffset]");
+    if (!tr) return;
+    e.preventDefault();
+    const r = trToRange.get(tr);
+    if (!r) return;
+    handle.showContextMenuAt(r, e.clientX, e.clientY, "View bytes", () => handle.onClickRange?.(r));
+  });
 
   // ── Table hover handlers ──
   table.addEventListener("mouseover", (e) => {

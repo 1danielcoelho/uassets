@@ -175,6 +175,7 @@ export interface HexViewHandle extends ViewerHandle {
   updateColorMap(ranges: ColoredRange[]): void;
   onClickRange: ((range: ByteRange) => void) | null;
   onDblClickRange: ((range: ByteRange) => void) | null;
+  onContextMenuRange: ((range: ByteRange, x: number, y: number) => void) | null;
   scrollToOffset(offset: number): void;
   /**
    * Set all search highlight state at once.
