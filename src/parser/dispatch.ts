@@ -11,7 +11,7 @@
 
 import { BinaryReader } from "./reader.ts";
 
-type ExportParser = (
+export type ExportParser = (
   r: BinaryReader,
   classname: string,
   offset: number,
@@ -21,6 +21,7 @@ type ExportParser = (
   fileVersionUE5: number,
   scriptStart: number,
   scriptEnd: number,
+  customVersions: ReadonlyMap<string, number>,
 ) => void;
 
 // Registry of class name → parser function
@@ -44,15 +45,16 @@ export function dispatchExport(
   fileVersionUE5: number,
   scriptStart: number,
   scriptEnd: number,
+  customVersions: ReadonlyMap<string, number>,
 ): boolean {
   const parser = PARSERS.get(className);
   if (parser) {
-    parser(r, className, offset, size, names, fileVersionUE4, fileVersionUE5, scriptStart, scriptEnd);
+    parser(r, className, offset, size, names, fileVersionUE4, fileVersionUE5, scriptStart, scriptEnd, customVersions);
     return true;
   }
   return false;
 }
 
 // ── Import asset parsers (add more files here as they are implemented) ────────
-// import "./assets/static-mesh.ts";
+// Parsers are imported by parser.ts to avoid circular module dependencies.
 // import "./assets/texture2d.ts";

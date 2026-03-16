@@ -29,6 +29,8 @@ import {
 import type { FGuid, FObjectImport, FObjectExport } from "./types.ts";
 import { resolveName, resolveClass } from "./utils.ts";
 import { dispatchExport } from "./dispatch.ts";
+import "./assets/static-mesh.ts";
+import { readCompressedBuffer } from "./compressed-buffer.ts";
 import { parseTaggedProperties } from "./tagged-properties.ts";
 import type { ParseResult, AssetSummary } from "../types.ts";
 
@@ -602,7 +604,7 @@ function parseOpaqueBlobs(
         const entry = payloadEntries[i]!;
         if (entry.offset >= 0 && entry.compSize > 0) {
           r.seek(payloadDataStart + entry.offset);
-          r.readBytes(entry.compSize, `Payload Data [${i}]`);
+          readCompressedBuffer(r, entry.compSize, `Payload Data [${i}]`);
         }
       }
 
@@ -741,6 +743,11 @@ export function parseUAsset(buffer: ArrayBuffer): ParseResult {
   // Step 5: Metadata (after opaque blobs; needs softObjectPaths)
   parseMetadata(r, h, names, softObjectPaths);
 
+  // Build custom versions map for asset-specific parsers
+  const customVersions: Map<string, number> = new Map(
+    h.customVersions.map(cv => [cv.name, cv.version]),
+  );
+
   // Step 6: Export data — all exports under one "Exports" group
   const firstExportOffset = exports
     .map(e => Number(e.serialOffset))
@@ -762,6 +769,7 @@ export function parseUAsset(buffer: ArrayBuffer): ParseResult {
           r, cls, offset, size, names, h.fileVersionUE4, h.fileVersionUE5,
           Number(exp.scriptSerializationStartOffset),
           Number(exp.scriptSerializationEndOffset),
+          customVersions,
         );
         if (!handled) {
           r.seek(offset);

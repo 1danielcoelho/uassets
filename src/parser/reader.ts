@@ -108,6 +108,28 @@ export class BinaryReader {
     return value;
   }
 
+  readUint32BE(): number;
+  readUint32BE(label: string): number;
+  readUint32BE(label?: string): number {
+    const start = this.pos;
+    this.assertBounds(4, label);
+    const value = this.view.getUint32(this.pos, false);
+    this.pos += 4;
+    if (label !== undefined) this._annotations.push({ kind: "uint32", start, end: this.pos, label, value });
+    return value;
+  }
+
+  readUint64BE(): bigint;
+  readUint64BE(label: string): bigint;
+  readUint64BE(label?: string): bigint {
+    const start = this.pos;
+    this.assertBounds(8, label);
+    const value = this.view.getBigUint64(this.pos, false);
+    this.pos += 8;
+    if (label !== undefined) this._annotations.push({ kind: "uint64", start, end: this.pos, label, value });
+    return value;
+  }
+
   readInt64(): bigint;
   readInt64(label: string): bigint;
   readInt64(label?: string): bigint {
