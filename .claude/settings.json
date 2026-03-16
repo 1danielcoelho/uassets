@@ -17,11 +17,16 @@
       "Bash(bun test:*)",
       "Bash(awk:*)",
       "Bash(sed:*)",
+      "Bash(sed -n:*)",
+      "Bash(sed -n :*)",
+      "Bash(sed -n *)",
       "Bash(grep:*)",
+      "Bash(grep -n:*)",
       "Bash(timeout 8 bun dev.ts:*)",
       "Bash(bun build:*)",
+      "Bash(bun src/cli/dump.ts:*)",
       "Bash(/home/daniel/.bun/bin/bun build:*)",
-      "Bash(/home/daniel/.bun/bin/bun test:*)"
+      "Bash(/home/daniel/.bun/bin/bun test:*)",
     ],
     "additionalDirectories": [
       "/tmp"

@@ -120,11 +120,33 @@ export function buildActiveRanges(ranges: ByteRange[], expandedRanges: Set<ByteR
   const result: ColoredRange[] = [];
   for (const range of ranges) {
     if (range.kind === "group" && range.children.length > 0 && expandedRanges.has(range)) {
-      result.push(...buildActiveRanges(range.children, expandedRanges));
+      // Recursive call already returns a sorted list (see sort at end of this function).
+      const childRanges = buildActiveRanges(range.children, expandedRanges);
+      // Fill any gaps within the parent's span with the parent color so that
+      // expanding a group (whose children don't fully cover it due to seek() jumps)
+      // never leaves bytes unannotated.
+      const parentColor = colorForLabel(range.label);
+      let pos = range.start;
+      for (const cr of childRanges) {
+        if (cr.start > pos) {
+          result.push({ start: pos, end: cr.start, color: parentColor, range });
+        }
+        if (cr.end > pos) {
+          result.push(cr);
+          pos = cr.end;
+        }
+      }
+      if (pos < range.end) {
+        result.push({ start: pos, end: range.end, color: parentColor, range });
+      }
     } else {
       result.push({ start: range.start, end: range.end, color: colorForLabel(range.label), range });
     }
   }
+  // Sort by file offset so the colorMap is always in order for colorForByte's binary search.
+  // The annotation tree can be out of file-offset order when the parser reads a TOC first
+  // and then seeks back to an earlier offset to read the data it describes (e.g. thumbnails).
+  result.sort((a, b) => a.start - b.start);
   return result;
 }
 

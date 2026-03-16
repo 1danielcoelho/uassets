@@ -92,23 +92,23 @@ function parseImportsTable(
   r.group("Imports Table", () => {
     for (let i = 0; i < h.importCount; i++) {
       r.group(`Import[${i}]`, () => {
-        const classPackageIdx = r.readInt32();
-        /* classPackageNum = */ r.readInt32();
-        const classNameIdx    = r.readInt32();
-        /* classNameNum = */    r.readInt32();
-        const outerIndex      = r.readInt32();
-        const objectNameIdx   = r.readInt32();
-        /* objectNameNum = */   r.readInt32();
+        const classPackageIdx = r.readInt32("Class Package");
+        r.readInt32("Class Package Number");
+        const classNameIdx    = r.readInt32("Class Name");
+        r.readInt32("Class Name Number");
+        const outerIndex      = r.readInt32("Outer Index");
+        const objectNameIdx   = r.readInt32("Object Name");
+        r.readInt32("Object Name Number");
 
         // Editor-only: PackageName (FName = 2 × int32) since fileVersionUE4 >= 520
         if (h.fileVersionUE4 >= UE4_NON_OUTER_PACKAGE_IMPORT) {
-          r.readInt32(); // packageNameIdx
-          r.readInt32(); // packageNameNum
+          r.readInt32("Package Name");
+          r.readInt32("Package Name Number");
         }
 
         // bImportOptional (serialized as int32 in binary archive) since fileVersionUE5 >= 1003
         if (h.fileVersionUE5 >= UE5_OPTIONAL_RESOURCES) {
-          r.readInt32();
+          r.readInt32("Import Optional");
         }
 
         const imp: FObjectImport = {
@@ -150,28 +150,28 @@ function parseExportsTable(
   r.group("Exports Table", () => {
     for (let i = 0; i < h.exportCount; i++) {
       r.group(`Export[${i}]`, () => {
-        const classIndex  = r.readInt32();
-        const superIndex  = r.readInt32();
+        const classIndex  = r.readInt32("Class Index");
+        const superIndex  = r.readInt32("Super Index");
         const templateIndex = (h.fileVersionUE4 >= UE4_TEMPLATEINDEX_IN_COOKED_EXPORTS)
-          ? r.readInt32() : 0;
-        const outerIndex  = r.readInt32();
-        const objectNameIdx = r.readInt32(); // FName index
-        /* objectNameNum */ r.readInt32();   // FName instance number (ignore)
-        const objectFlags = r.readUint32();
+          ? r.readInt32("Template Index") : 0;
+        const outerIndex  = r.readInt32("Outer Index");
+        const objectNameIdx = r.readInt32("Object Name");
+        r.readInt32("Object Name Number");
+        const objectFlags = r.readUint32("Object Flags");
 
         const serialSize   = (h.fileVersionUE4 >= UE4_64BIT_EXPORTMAP_SERIALSIZES)
-          ? r.readInt64() : BigInt(r.readInt32());
+          ? r.readInt64("Serial Size") : BigInt(r.readInt32("Serial Size"));
         const serialOffset = (h.fileVersionUE4 >= UE4_64BIT_EXPORTMAP_SERIALSIZES)
-          ? r.readInt64() : BigInt(r.readInt32());
+          ? r.readInt64("Serial Offset") : BigInt(r.readInt32("Serial Offset"));
 
-        const forcedExport = r.readInt32() !== 0;
-        const notForClient = r.readInt32() !== 0;
-        const notForServer = r.readInt32() !== 0;
+        const forcedExport = r.readInt32("Forced Export") !== 0;
+        const notForClient = r.readInt32("Not For Client") !== 0;
+        const notForServer = r.readInt32("Not For Server") !== 0;
 
         // PackageGuid removed in UE5 >= 1005, but PackageFlags is ALWAYS present
         let packageGuid: FGuid | undefined;
         if (h.fileVersionUE5 < UE5_REMOVE_OBJECT_EXPORT_PACKAGE_GUID) {
-          packageGuid = r.readFGuid();
+          packageGuid = r.readFGuid("Package GUID");
         }
 
         // bIsInheritedInstance — UE5 >= 1006, serialized BEFORE PackageFlags
@@ -179,27 +179,27 @@ function parseExportsTable(
           (h.fileVersionUE5 >= UE5_TRACK_OBJECT_EXPORT_IS_INHERITED) ? r.readInt32("Is Inherited Instance") !== 0 : false;
 
         // PackageFlags — always present (even when PackageGuid was removed)
-        const exportPackageFlags = r.readUint32();
+        const exportPackageFlags = r.readUint32("Package Flags");
 
         const notAlwaysLoadedForEditorGame =
-          (h.fileVersionUE4 >= UE4_LOAD_FOR_EDITOR_GAME) ? r.readInt32() !== 0 : false;
+          (h.fileVersionUE4 >= UE4_LOAD_FOR_EDITOR_GAME) ? r.readInt32("Not Always Loaded For Editor Game") !== 0 : false;
         const isAsset =
-          (h.fileVersionUE4 >= UE4_COOKED_ASSETS_IN_EDITOR_SUPPORT) ? r.readInt32() !== 0 : false;
+          (h.fileVersionUE4 >= UE4_COOKED_ASSETS_IN_EDITOR_SUPPORT) ? r.readInt32("Is Asset") !== 0 : false;
 
         // bGeneratePublicHash — UE5 >= 1003 (OPTIONAL_RESOURCES)
         const generatePublicHash =
-          (h.fileVersionUE5 >= UE5_OPTIONAL_RESOURCES) ? r.readInt32() !== 0 : false;
+          (h.fileVersionUE5 >= UE5_OPTIONAL_RESOURCES) ? r.readInt32("Generate Public Hash") !== 0 : false;
 
         // Preload dependency indices — UE4 >= 507
         let firstExportDep = -1;
         let serBeforeSerDeps = 0, createBeforeSerDeps = 0,
             serBeforeCreateDeps = 0, createBeforeCreateDeps = 0;
         if (h.fileVersionUE4 >= UE4_PRELOAD_DEPENDENCIES_IN_COOKED_EXPORTS) {
-          firstExportDep         = r.readInt32();
-          serBeforeSerDeps       = r.readInt32();
-          createBeforeSerDeps    = r.readInt32();
-          serBeforeCreateDeps    = r.readInt32();
-          createBeforeCreateDeps = r.readInt32();
+          firstExportDep         = r.readInt32("First Export Dependency");
+          serBeforeSerDeps       = r.readInt32("Ser Before Ser Dependencies");
+          createBeforeSerDeps    = r.readInt32("Create Before Ser Dependencies");
+          serBeforeCreateDeps    = r.readInt32("Ser Before Create Dependencies");
+          createBeforeCreateDeps = r.readInt32("Create Before Create Dependencies");
         }
 
         // Script serialization offsets — UE5 >= 1010, serialized AFTER dependency counts
@@ -448,49 +448,70 @@ function parseOpaqueBlobs(
   let primaryThumbnail: AssetSummary["thumbnail"] = undefined;
 
   if (h.thumbnailTableOffset > 0) {
+    // Pass 1: quick unlabeled read of the TOC to collect (objectPath, fileOffset) entries.
+    // The data blobs live at lower file offsets than the TOC, so we need the offsets before
+    // we can start the wrapper group at the correct byte position.
     r.seek(h.thumbnailTableOffset);
+    const thumbCount = r.readInt32();
     const thumbEntries: { objectPath: string; fileOffset: number }[] = [];
-    r.group("Thumbnail Table (TOC)", () => {
-      const count = r.readInt32("Thumbnail Count");
-      for (let i = 0; i < count; i++) {
-        r.group(`Thumbnail TOC[${i}]`, () => {
-          const className  = r.readFString("Object Class Name");
-          const objectPath = r.readFString("Object Path");
-          const fileOffset = r.readInt32("File Offset");
-          thumbEntries.push({ objectPath, fileOffset });
-          return `${objectPath} @ 0x${fileOffset.toString(16)}`;
-        });
-      }
-      return `${thumbEntries.length} thumbnail(s)`;
-    });
+    for (let i = 0; i < thumbCount; i++) {
+      r.readFString(); // className
+      const objectPath = r.readFString();
+      const fileOffset = r.readInt32();
+      thumbEntries.push({ objectPath, fileOffset });
+    }
+    const tocEndPos = r.pos;
 
-    for (let i = 0; i < thumbEntries.length; i++) {
-      const { objectPath, fileOffset } = thumbEntries[i]!;
-      if (fileOffset > 0 && fileOffset < r.byteLength) {
-        r.seek(fileOffset);
-        r.group(`Thumbnail Data [${i}]: ${objectPath}`, () => {
-          const width  = r.readInt32("Image Width");
-          const rawH   = r.readInt32("Image Height"); // negative = JPEG, positive = PNG
-          const isJPEG = rawH < 0;
-          const absH   = Math.abs(rawH);
-          if (width > 0 && absH > 0) {
-            const dataSize = r.readInt32("Compressed Data Size");
-            if (dataSize > 0) {
-              const imgData = r.readBytes(dataSize, isJPEG ? "JPEG Data" : "PNG Data");
-              if (!primaryThumbnail) {
-                primaryThumbnail = {
-                  width,
-                  height: absH,
-                  mimeType: isJPEG ? "image/jpeg" : "image/png",
-                  data: imgData.slice(), // detach from the shared ArrayBuffer view
-                };
+    // Pass 2: emit a single "Thumbnail Table" group that contains both the data blobs
+    // (at lower offsets) and the TOC (at thumbnailTableOffset) as children.
+    const validOffsets = thumbEntries.map(e => e.fileOffset).filter(o => o > 0 && o < r.byteLength);
+    const groupStart   = validOffsets.length > 0 ? Math.min(...validOffsets) : h.thumbnailTableOffset;
+    r.seek(groupStart);
+    r.group("Thumbnail Table", () => {
+      // Data blobs first (they sit before the TOC in the file)
+      for (let i = 0; i < thumbEntries.length; i++) {
+        const { objectPath, fileOffset } = thumbEntries[i]!;
+        if (fileOffset > 0 && fileOffset < r.byteLength) {
+          r.seek(fileOffset);
+          r.group(`Thumbnail Data [${i}]: ${objectPath}`, () => {
+            const width  = r.readInt32("Image Width");
+            const rawH   = r.readInt32("Image Height"); // negative = JPEG, positive = PNG
+            const isJPEG = rawH < 0;
+            const absH   = Math.abs(rawH);
+            if (width > 0 && absH > 0) {
+              const dataSize = r.readInt32("Compressed Data Size");
+              if (dataSize > 0) {
+                const imgData = r.readBytes(dataSize, isJPEG ? "JPEG Data" : "PNG Data");
+                if (!primaryThumbnail) {
+                  primaryThumbnail = {
+                    width,
+                    height: absH,
+                    mimeType: isJPEG ? "image/jpeg" : "image/png",
+                    data: imgData.slice(), // detach from the shared ArrayBuffer view
+                  };
+                }
               }
             }
-          }
-          return `${width}×${absH} ${isJPEG ? "JPEG" : "PNG"}`;
-        });
+            return `${width}×${absH} ${isJPEG ? "JPEG" : "PNG"}`;
+          });
+        }
       }
-    }
+      // TOC (after the data blobs in the file)
+      r.seek(h.thumbnailTableOffset);
+      r.group("Thumbnail TOC", () => {
+        r.readInt32("Thumbnail Count");
+        for (let i = 0; i < thumbEntries.length; i++) {
+          r.group(`Thumbnail TOC[${i}]`, () => {
+            r.readFString("Object Class Name");
+            r.readFString("Object Path");
+            r.readInt32("File Offset");
+            return `${thumbEntries[i]!.objectPath} @ 0x${thumbEntries[i]!.fileOffset.toString(16)}`;
+          });
+        }
+      });
+      r.seek(tocEndPos); // leave cursor at end of TOC so group.end is correct
+      return `${thumbCount} thumbnail(s)`;
+    });
   }
 
   // Asset Registry Data — content browser metadata + dependency flags.

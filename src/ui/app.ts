@@ -374,9 +374,9 @@ showWelcome();
 
 // ── Dev: auto-load test asset (disabled — use example buttons above) ──────────
 
-// if (location.hostname === "localhost" || location.hostname === "127.0.0.1") {
-//   fetch("/test/assets/5_7_3/SM_cube.uasset")
-//     .then(r => r.ok ? r.arrayBuffer() : Promise.reject())
-//     .then(buf => openFile(new File([buf], "SM_cube.uasset")))
-//     .catch(() => { /* file missing — silently skip */ });
-// }
+if (location.hostname === "localhost" || location.hostname === "127.0.0.1") {
+  fetch("/test/assets/5_7_3/SM_cube.uasset")
+    .then(r => r.ok ? r.arrayBuffer() : Promise.reject())
+    .then(buf => openFile(new File([buf], "SM_cube.uasset")))
+    .catch(() => { /* file missing — silently skip */ });
+}
