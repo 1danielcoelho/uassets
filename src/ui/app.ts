@@ -2,19 +2,22 @@ import type { ParseResult, ByteRange } from "../types.ts";
 import { DEFAULT_OPTIONS } from "../types.ts";
 import { parseUAsset } from "../parser/parser.ts";
 import { initHexView, hexColumnWidth } from "./hex-view.ts";
-import { initLegend, type LegendHandle } from "./legend.ts";
-import { formatSize, escHtml, findMatches, findLegendMatches, findAddressMatches, type HexViewHandle } from "./utils.ts";
+import { initAnnotation, type AnnotationHandle } from "./annotation.ts";
+import { formatSize, escHtml, findMatches, findAnnotationMatches, findAddressMatches, type HexViewHandle } from "./utils.ts";
 
 // ── Elements ──────────────────────────────────────────────────────────────────
 
-const hexPanel     = document.getElementById("hex-panel")!;
-const hexColHeader = document.getElementById("hex-col-header")!;
-const hexColumn    = document.getElementById("hex-column")!;
-const summaryPanel = document.getElementById("summary-panel")!;
-const legendPanel  = document.getElementById("legend-panel")!;
-const menuFile     = document.getElementById("menu-file")!;
-const dropdownFile = document.getElementById("dropdown-file")!;
-const menuFileOpen = document.getElementById("menu-file-open")!;
+const hexPanel          = document.getElementById("hex-panel")!;
+const hexColHeader      = document.getElementById("hex-col-header")!;
+const hexColumn         = document.getElementById("hex-column")!;
+const summaryPanel      = document.getElementById("summary-panel")!;
+const annotationPanel   = document.getElementById("annotation-panel")!;
+const menuFile          = document.getElementById("menu-file")!;
+const dropdownFile      = document.getElementById("dropdown-file")!;
+const menuFileOpen      = document.getElementById("menu-file-open")!;
+const submenuExamples   = document.getElementById("submenu-examples")!;
+const btnExpandAll      = document.getElementById("btn-expand-all")!;
+const btnCollapseAll    = document.getElementById("btn-collapse-all")!;
 
 // ── Search elements ───────────────────────────────────────────────────────────
 
@@ -71,20 +74,20 @@ document.addEventListener("drop", (e) => {
 // ── Search state ──────────────────────────────────────────────────────────────
 
 type SearchMatchItem =
-  | { kind: "byte";    offset: number; len: number }
-  | { kind: "address"; offset: number }
-  | { kind: "legend";  range: ByteRange };
+  | { kind: "byte";       offset: number; len: number }
+  | { kind: "address";    offset: number }
+  | { kind: "annotation"; range: ByteRange };
 
-let fileBytes:         Uint8Array | null  = null;
-let hexHandle:         HexViewHandle | null = null;
-let legendHandle:      LegendHandle | null  = null;
-let allRanges:         ByteRange[]          = [];
+let fileBytes:              Uint8Array | null        = null;
+let hexHandle:              HexViewHandle | null     = null;
+let annotationHandle:       AnnotationHandle | null  = null;
+let allRanges:              ByteRange[]              = [];
 
-let allMatches:        SearchMatchItem[] = [];
-let searchActive       = -1;
-let byteMatchGroups:   Array<{ offsets: number[]; len: number }> = [];
-let addressOffsets:    number[]    = [];
-let legendMatchRanges: ByteRange[] = [];
+let allMatches:             SearchMatchItem[] = [];
+let searchActive            = -1;
+let byteMatchGroups:        Array<{ offsets: number[]; len: number }> = [];
+let addressOffsets:         number[]    = [];
+let annotationMatchRanges:  ByteRange[] = [];
 
 function runSearch(): void {
   const query = searchInput.value;
@@ -108,10 +111,10 @@ function runSearch(): void {
     addressOffsets = findAddressMatches(fileBytes.length, DEFAULT_OPTIONS.bytesPerRow, query);
   }
 
-  // Legend search
-  legendMatchRanges = [];
+  // Annotation search
+  annotationMatchRanges = [];
   if (chkLegend.checked && query) {
-    legendMatchRanges = findLegendMatches(allRanges, query);
+    annotationMatchRanges = findAnnotationMatches(allRanges, query);
   }
 
   // Byte navigation entries sorted by offset (both modes interleaved)
@@ -119,11 +122,11 @@ function runSearch(): void {
     .flatMap(g => g.offsets.map(o => ({ kind: "byte" as const, offset: o, len: g.len })))
     .sort((a, b) => a.offset - b.offset);
 
-  // Combined list: byte matches first, then address matches, then legend matches
+  // Combined list: byte matches first, then address matches, then annotation matches
   allMatches = [
     ...byteNavMatches,
     ...addressOffsets.map(o => ({ kind: "address" as const, offset: o })),
-    ...legendMatchRanges.map(r => ({ kind: "legend" as const, range: r })),
+    ...annotationMatchRanges.map(r => ({ kind: "annotation" as const, range: r })),
   ];
 
   searchActive = allMatches.length > 0 ? 0 : -1;
@@ -142,13 +145,13 @@ function goToMatch(delta: number): void {
 
 function applySearchState(): void {
   const m = searchActive >= 0 ? allMatches[searchActive] : null;
-  const activeByteOffset  = m?.kind === "byte"    ? m.offset : -1;
-  const activeByteLen     = m?.kind === "byte"    ? m.len    : 0;
-  const activeAddrOffset  = m?.kind === "address" ? m.offset : -1;
-  const activeLegendRange = m?.kind === "legend"  ? m.range  : null;
+  const activeByteOffset    = m?.kind === "byte"       ? m.offset : -1;
+  const activeByteLen       = m?.kind === "byte"       ? m.len    : 0;
+  const activeAddrOffset    = m?.kind === "address"    ? m.offset : -1;
+  const activeAnnotRange    = m?.kind === "annotation" ? m.range  : null;
 
   hexHandle?.setSearchHighlights(byteMatchGroups, activeByteOffset, activeByteLen, addressOffsets, activeAddrOffset);
-  legendHandle?.setSearchResults(legendMatchRanges, activeLegendRange);
+  annotationHandle?.setSearchResults(annotationMatchRanges, activeAnnotRange);
 }
 
 function findDeepestRangeAtOffset(ranges: ByteRange[], offset: number): ByteRange | null {
@@ -169,12 +172,12 @@ function jumpToMatch(idx: number): void {
   if (!m) return;
   if (m.kind === "byte" || m.kind === "address") {
     hexHandle?.scrollToOffset(m.offset);
-    if (legendHandle) {
+    if (annotationHandle) {
       const range = findDeepestRangeAtOffset(allRanges, m.offset);
-      if (range) legendHandle.expandAndScrollToRange(range);
+      if (range) annotationHandle.expandAndScrollToRange(range);
     }
   } else {
-    legendHandle?.expandAndScrollToRange(m.range);
+    annotationHandle?.expandAndScrollToRange(m.range);
     hexHandle?.scrollToOffset(m.range.start);
   }
 }
@@ -192,11 +195,11 @@ function updateSearchUI(query: string): void {
 }
 
 function clearSearchState(): void {
-  allMatches        = [];
-  byteMatchGroups   = [];
-  addressOffsets    = [];
-  legendMatchRanges = [];
-  searchActive      = -1;
+  allMatches            = [];
+  byteMatchGroups       = [];
+  addressOffsets        = [];
+  annotationMatchRanges = [];
+  searchActive          = -1;
   searchInput.classList.remove("no-match");
   searchCount.textContent = "";
 }
@@ -212,7 +215,7 @@ function showSearch(): void {
 function hideSearch(): void {
   searchBar.hidden = true;
   hexHandle?.setSearchHighlights([], -1, 0, [], -1);
-  legendHandle?.setSearchResults([], null);
+  annotationHandle?.setSearchResults([], null);
 }
 
 let searchDebounceTimer = 0;
@@ -253,6 +256,11 @@ document.addEventListener("keydown", (e) => {
   }
 });
 
+// ── Expand / Collapse all ─────────────────────────────────────────────────────
+
+btnExpandAll.addEventListener("click",  () => annotationHandle?.expandAll());
+btnCollapseAll.addEventListener("click", () => annotationHandle?.collapseAll());
+
 // ── Open & parse ──────────────────────────────────────────────────────────────
 
 async function openFile(file: File): Promise<void> {
@@ -280,21 +288,25 @@ async function openFile(file: File): Promise<void> {
   renderSummary(result, file);
   hexColHeader.classList.remove("hidden");
   hexColumn.style.width = `${hexColumnWidth(DEFAULT_OPTIONS.bytesPerRow)}px`;
-  hexHandle    = initHexView(hexPanel, hexColHeader, buffer, result, DEFAULT_OPTIONS);
-  legendHandle = initLegend(legendPanel, result.ranges, hexHandle.updateColorMap);
+  hexHandle        = initHexView(hexPanel, hexColHeader, buffer, result, DEFAULT_OPTIONS);
+  annotationHandle = initAnnotation(annotationPanel, result.ranges, hexHandle.updateColorMap);
 
   // Cross-wire hover sync.
-  hexHandle.onHoverChange    = legendHandle.setHovered.bind(legendHandle);
-  legendHandle.onHoverChange = hexHandle.setHovered.bind(hexHandle);
+  hexHandle.onHoverChange        = annotationHandle.setHovered.bind(annotationHandle);
+  annotationHandle.onHoverChange = hexHandle.setHovered.bind(hexHandle);
 
-  // Hex click → expand group in legend (if applicable) then scroll legend to that row.
+  // Hex single click → scroll annotation to that row (navigate only, no expand).
   hexHandle.onClickRange = (range) => {
-    legendHandle!.expandRange(range);
-    legendHandle!.scrollToRange(range);
+    annotationHandle!.scrollToRange(range);
   };
 
-  // Legend click → scroll hex view to that range's start offset.
-  legendHandle.onClickRange = (range) => hexHandle!.scrollToOffset(range.start);
+  // Hex double click → toggle expand/collapse of the annotation group.
+  hexHandle.onDblClickRange = (range) => {
+    annotationHandle!.toggleRange(range);
+  };
+
+  // Annotation click → scroll hex view to that range's start offset.
+  annotationHandle.onClickRange = (range) => hexHandle!.scrollToOffset(range.start);
 }
 
 // ── Summary panel ─────────────────────────────────────────────────────────────
@@ -348,6 +360,27 @@ const EXAMPLE_ASSETS: { file: string; label: string }[] = [
   { file: "T_shapes.uasset",          label: "Texture"           },
 ];
 
+function loadExampleAsset(name: string): void {
+  dropdownFile.classList.remove("open");
+  fetch(`/test/assets/5_7_3/${name}`)
+    .then(r => r.ok ? r.arrayBuffer() : Promise.reject(new Error(`HTTP ${r.status}`)))
+    .then(buf => openFile(new File([buf], name)))
+    .catch(err => alert(`Could not load example asset: ${err.message}`));
+}
+
+// ── Populate File → Open example submenu ──────────────────────────────────────
+
+for (const { file, label } of EXAMPLE_ASSETS) {
+  const item = document.createElement("div");
+  item.className = "dropdown-item";
+  item.textContent = label;
+  item.addEventListener("click", (e) => {
+    e.stopPropagation();
+    loadExampleAsset(file);
+  });
+  submenuExamples.appendChild(item);
+}
+
 function showWelcome(): void {
   hexColHeader.classList.add("hidden");
   const btns = EXAMPLE_ASSETS.map(({ file, label }) =>
@@ -360,13 +393,7 @@ function showWelcome(): void {
     `<div class="example-btns">${btns}</div>` +
     `</div>`;
   hexPanel.querySelectorAll<HTMLButtonElement>(".example-btn").forEach(btn => {
-    btn.addEventListener("click", () => {
-      const name = btn.dataset.asset!;
-      fetch(`/test/assets/5_7_3/${name}`)
-        .then(r => r.ok ? r.arrayBuffer() : Promise.reject(new Error(`HTTP ${r.status}`)))
-        .then(buf => openFile(new File([buf], name)))
-        .catch(err => alert(`Could not load example asset: ${err.message}`));
-    });
+    btn.addEventListener("click", () => loadExampleAsset(btn.dataset.asset!));
   });
 }
 

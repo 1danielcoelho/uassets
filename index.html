@@ -62,6 +62,25 @@
       }
       .dropdown-item:hover { background: #3a3a3a; }
 
+      /* ── Submenu ── */
+      .dropdown-item.has-submenu {
+        position: relative;
+        padding-right: 24px;
+      }
+      .submenu {
+        display: none;
+        position: absolute;
+        left: 100%;
+        top: -1px;
+        background: #2d2d2d;
+        border: 1px solid #555;
+        border-radius: 4px;
+        min-width: 160px;
+        z-index: 101;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+      }
+      .dropdown-item.has-submenu:hover .submenu { display: block; }
+
       /* ── Main content area ── */
       #content {
         display: flex;
@@ -209,7 +228,7 @@
         image-rendering: pixelated;
       }
 
-      #legend-panel {
+      #annotation-panel {
         flex: 1;
         overflow-y: auto;
         background: #1e1e1e;
@@ -249,15 +268,15 @@
         color: #fff;
       }
 
-      /* ── Legend table ── */
-      .legend-table {
+      /* ── Annotation table ── */
+      .annotation-table {
         width: 100%;
         border-collapse: collapse;
         font-size: 11px;
         table-layout: fixed;
       }
 
-      .legend-header-row th {
+      .annotation-header-row th {
         position: sticky;
         top: 0;
         background: #1e1e1e;
@@ -268,30 +287,30 @@
         text-transform: uppercase;
         letter-spacing: 0.06em;
         border-bottom: 1px solid #2a2a2a;
-        /* Use longhand so per-column horizontal padding from .legend-* still applies */
+        /* Use longhand so per-column horizontal padding from .annotation-* still applies */
         padding-top: 4px;
         padding-bottom: 5px;
         user-select: none;
         z-index: 1;
       }
 
-      .legend-row {
+      .annotation-row {
         border-bottom: 1px solid #1f1f1f;
         height: 22px;
       }
 
-      .legend-row:not(.legend-group-row) { cursor: pointer; }
-      .legend-row:not(.legend-group-row):hover { background: #252525; }
+      .annotation-row:not(.annotation-group-row) { cursor: pointer; }
+      .annotation-row:not(.annotation-group-row):hover { background: #252525; }
 
-      .legend-group-row {
+      .annotation-group-row {
         background: #232323;
         cursor: pointer;
         user-select: none;
       }
 
-      .legend-group-row:hover { background: #2c2c2c; }
+      .annotation-group-row:hover { background: #2c2c2c; }
 
-      .legend-swatch {
+      .annotation-swatch {
         width: 18px;
         padding: 0 2px 0 14px;
         vertical-align: middle;
@@ -303,7 +322,7 @@
         border-radius: 2px;
       }
 
-      .legend-size {
+      .annotation-size {
         width: 64px;
         color: #555;
         text-align: right;
@@ -313,7 +332,7 @@
         font-size: 10px;
       }
 
-      .legend-name {
+      .annotation-name {
         color: #d4d4d4;
         white-space: nowrap;
         overflow: hidden;
@@ -324,7 +343,7 @@
         padding: 0 4px;
       }
 
-      .legend-value {
+      .annotation-value {
         color: #888;
         white-space: nowrap;
         overflow: hidden;
@@ -333,7 +352,7 @@
         padding: 0 14px 0 6px;
       }
 
-      .legend-toggle {
+      .annotation-toggle {
         display: inline-block;
         color: #666;
         font-size: 8px;
@@ -342,21 +361,42 @@
         vertical-align: middle;
       }
 
-      /* ── Legend column header ── */
-      #legend-col-header {
+      /* ── Annotation column header ── */
+      #annotation-col-header {
         display: flex;
         align-items: center;
-        justify-content: center;
+        justify-content: space-between;
         height: 28px;
         flex-shrink: 0;
         background: #1e1e1e;
         border-bottom: 1px solid #272727;
+        padding: 0 8px 0 14px;
         font-size: 10px;
         color: #555;
         letter-spacing: 0.06em;
         text-transform: uppercase;
         user-select: none;
       }
+
+      .annotation-header-actions {
+        display: flex;
+        gap: 4px;
+      }
+
+      .annotation-header-btn {
+        background: none;
+        border: 1px solid #333;
+        color: #555;
+        cursor: pointer;
+        padding: 1px 6px;
+        border-radius: 3px;
+        font-size: 9px;
+        font-family: inherit;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        white-space: nowrap;
+      }
+      .annotation-header-btn:hover { color: #ccc; border-color: #555; background: #2a2a2a; }
 
       /* ── Search bar (floating popup) ── */
       #search-bar {
@@ -426,15 +466,15 @@
         gap: 4px;
       }
 
-      /* ── Legend search highlights ── */
-      .legend-row.legend-search-match { background: #ffffff !important; }
-      .legend-row.legend-search-match .legend-name,
-      .legend-row.legend-search-match .legend-value,
-      .legend-row.legend-search-match .legend-size { color: #111; }
-      .legend-row.legend-search-active { background: #ffee55 !important; }
-      .legend-row.legend-search-active .legend-name,
-      .legend-row.legend-search-active .legend-value,
-      .legend-row.legend-search-active .legend-size { color: #111; }
+      /* ── Annotation search highlights ── */
+      .annotation-row.annotation-search-match { background: #ffffff !important; }
+      .annotation-row.annotation-search-match .annotation-name,
+      .annotation-row.annotation-search-match .annotation-value,
+      .annotation-row.annotation-search-match .annotation-size { color: #111; }
+      .annotation-row.annotation-search-active { background: #ffee55 !important; }
+      .annotation-row.annotation-search-active .annotation-name,
+      .annotation-row.annotation-search-active .annotation-value,
+      .annotation-row.annotation-search-active .annotation-size { color: #111; }
 
       /* ── Hover sync ── */
 
@@ -446,14 +486,14 @@
 
       /* Swatch dots dim by default; full opacity when the row is highlighted */
       .swatch-dot { opacity: 0.65; }
-      .legend-row.hovered .swatch-dot,
-      .legend-row:hover .swatch-dot {
+      .annotation-row.hovered .swatch-dot,
+      .annotation-row:hover .swatch-dot {
         opacity: 1;
       }
 
-      /* Legend row highlight (driven by hex hover) */
-      .legend-row.hovered:not(.legend-group-row) { background: #2a2a2a; }
-      .legend-group-row.hovered                   { background: #313131; }
+      /* Annotation row highlight (driven by hex hover) */
+      .annotation-row.hovered:not(.annotation-group-row) { background: #2a2a2a; }
+      .annotation-group-row.hovered                       { background: #313131; }
     </style>
   </head>
   <body>
@@ -462,6 +502,10 @@
         File ▾
         <div class="dropdown" id="dropdown-file">
           <div class="dropdown-item" id="menu-file-open">Open…</div>
+          <div class="dropdown-item has-submenu" id="menu-file-open-example">
+            Open example ▸
+            <div class="submenu" id="submenu-examples"></div>
+          </div>
         </div>
       </div>
     </div>
@@ -472,8 +516,14 @@
       </div>
       <div id="right-panel">
         <div id="summary-panel"><span class="placeholder">No file loaded</span></div>
-        <div id="legend-col-header">Legend</div>
-        <div id="legend-panel"></div>
+        <div id="annotation-col-header">
+          <span>Annotations</span>
+          <div class="annotation-header-actions">
+            <button class="annotation-header-btn" id="btn-expand-all" title="Expand all groups">expand all</button>
+            <button class="annotation-header-btn" id="btn-collapse-all" title="Collapse all groups">collapse all</button>
+          </div>
+        </div>
+        <div id="annotation-panel"></div>
       </div>
     </div>
     <div id="search-bar" hidden>
@@ -484,7 +534,7 @@
       <label class="search-chk-label"><input type="checkbox" id="search-chk-hex" checked> Hex</label>
       <label class="search-chk-label"><input type="checkbox" id="search-chk-ascii" checked> ASCII</label>
       <label class="search-chk-label"><input type="checkbox" id="search-chk-addr"> Addr</label>
-      <label class="search-chk-label"><input type="checkbox" id="search-chk-legend"> Legend</label>
+      <label class="search-chk-label"><input type="checkbox" id="search-chk-legend"> Annotation</label>
       <span id="search-spacer"></span>
       <button class="search-btn" id="search-close" title="Close (Escape)">✕</button>
     </div>

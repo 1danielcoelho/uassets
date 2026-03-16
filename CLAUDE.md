@@ -165,10 +165,7 @@ The parser is fully refactored and all 6 test assets pass (6/6).
 
 ## Polishing steps
 
-- Rename the "Legend" stuff to "Annotation"
-- There should be a button to expand all or collapse all annotations somewhere...
-- I think the File menu should have a File -> Open example... submenu that lists the same examples on the welcome screen
-- I'm not quite sure about the interface regarding clicking on the hex view/legend to expand it... There's no way to collapse it back. And sometimes I just want to go to a particular point in the file and not also expand/collapse it too... I wonder what we could do UX-wise here? Maybe a single click moves to that spot, but double-click expands it? What about collapsing back?
+- There is no thumbnail for the level?
 - I think we can put the summary text to the right of the thumbnail now, since it's only 4 lines. It would give us some more space for the legends
 - **Contiguous selection** — This may be very difficult or make a mess, so feel free to push back, but it would be nice if doing a text select that starts on the bytes (raw) column only selected stuff in the bytes (raw) column. As it is now, doing a text selection treats the address, bytes (raw) and bytes (ascii) text as contiguous, which is not right
 - **Sync selection** — I don't want to mess with the standard mouse behavior too much, but it would be nice if selecting a section on the bytes (raw) view selected the same section on the bytes (ascii) view in some (visual) way. It doesn't have to add it to the actual selection, but at least highlight it so that we know what corresponds to what. The same would happen when selecting something on the Bytes (ascii) view

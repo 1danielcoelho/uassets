@@ -267,10 +267,22 @@ export function initHexView(
     handle.onClickRange?.(cr.range);
   }, { signal });
 
+  // ── Double-click handler — for expand/collapse ─────────────────────────────
+  container.addEventListener("dblclick", (e) => {
+    const target = e.target as HTMLElement;
+    if (!target.classList.contains("b") && !target.classList.contains("c")) return;
+    const offsetStr = target.getAttribute("data-byteoffset");
+    if (offsetStr === null) return;
+    const cr = colorForByte(Number(offsetStr), colorMap);
+    if (!cr) return;
+    handle.onDblClickRange?.(cr.range);
+  }, { signal });
+
   // ── Handle ───────────────────────────────────────────────────────────────
   const handle: HexViewHandle = {
     onHoverChange: null,
     onClickRange: null,
+    onDblClickRange: null,
 
     updateColorMap(ranges: ColoredRange[]): void {
       colorMap = ranges;

@@ -62,7 +62,7 @@ export function findAddressMatches(totalBytes: number, bytesPerRow: number, quer
 }
 
 /** Case-insensitive search through a range tree's labels and values. */
-export function findLegendMatches(ranges: ByteRange[], query: string): ByteRange[] {
+export function findAnnotationMatches(ranges: ByteRange[], query: string): ByteRange[] {
   const q = query.toLowerCase();
   const result: ByteRange[] = [];
   function walk(range: ByteRange): void {
@@ -174,6 +174,7 @@ export interface ViewerHandle {
 export interface HexViewHandle extends ViewerHandle {
   updateColorMap(ranges: ColoredRange[]): void;
   onClickRange: ((range: ByteRange) => void) | null;
+  onDblClickRange: ((range: ByteRange) => void) | null;
   scrollToOffset(offset: number): void;
   /**
    * Set all search highlight state at once.

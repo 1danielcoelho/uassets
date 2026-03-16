@@ -7,8 +7,11 @@ import {
 
 // ── Public types ──────────────────────────────────────────────────────────────
 
-export interface LegendHandle extends ViewerHandle {
+export interface AnnotationHandle extends ViewerHandle {
   expandRange(range: ByteRange): void;
+  toggleRange(range: ByteRange): void;
+  expandAll(): void;
+  collapseAll(): void;
   scrollToRange(range: ByteRange): void;
   expandAndScrollToRange(range: ByteRange): void;
   setSearchResults(matches: ByteRange[], activeRange: ByteRange | null): void;
@@ -25,14 +28,14 @@ interface RowInfo {
 
 // ── Public API ────────────────────────────────────────────────────────────────
 
-export function initLegend(
+export function initAnnotation(
   container: HTMLElement,
   ranges: ByteRange[],
   onColorMapChange?: (ranges: ColoredRange[]) => void,
-): LegendHandle {
+): AnnotationHandle {
   container.innerHTML = "";
   const table = document.createElement("table");
-  table.className = "legend-table";
+  table.className = "annotation-table";
   container.appendChild(table);
 
   // ── Expansion state ──
@@ -69,8 +72,7 @@ export function initLegend(
   let lastHoveredStart: number | null = null;
   let lastHoveredEnd:   number | null = null;
 
-  const handle: LegendHandle = {
-    // This receives the hex view's setHovered
+  const handle: AnnotationHandle = {
     onHoverChange: null,
     onClickRange: null,
 
@@ -96,12 +98,53 @@ export function initLegend(
       const info = rangeToRowInfo.get(range);
       if (!info) return;
       const { directChildRows, toggleEl } = info;
-      // If already expanded, do nothing (hex click is expand-only)
+      // If already expanded, do nothing (search/navigate is expand-only)
       const isExpanded = directChildRows.length > 0 && directChildRows[0]!.style.display !== "none";
       if (isExpanded) return;
       toggleEl.textContent = "▼";
       for (const row of directChildRows) row.style.display = "";
       expandedRanges.add(range);
+      notifyChange();
+    },
+
+    toggleRange(range: ByteRange): void {
+      if (range.kind !== "group") return;
+      const info = rangeToRowInfo.get(range);
+      if (!info) return;
+      const { directChildRows, allDescendantRows, toggleEl } = info;
+      const isExpanded = directChildRows.length > 0 && directChildRows[0]!.style.display !== "none";
+      if (isExpanded) {
+        toggleEl.textContent = "▶";
+        for (const row of allDescendantRows) {
+          row.style.display = "none";
+          const innerToggle = row.querySelector<HTMLElement>(".annotation-toggle");
+          if (innerToggle) innerToggle.textContent = "▶";
+        }
+        removeDescendantsFromExpanded(range, expandedRanges);
+        notifyChange();
+      } else {
+        toggleEl.textContent = "▼";
+        for (const row of directChildRows) row.style.display = "";
+        expandedRanges.add(range);
+        notifyChange();
+      }
+    },
+
+    expandAll(): void {
+      for (const [, info] of rangeToRowInfo) {
+        info.toggleEl.textContent = "▼";
+        for (const row of info.allDescendantRows) row.style.display = "";
+      }
+      for (const [range] of rangeToRowInfo) expandedRanges.add(range);
+      notifyChange();
+    },
+
+    collapseAll(): void {
+      expandedRanges.clear();
+      for (const [, info] of rangeToRowInfo) {
+        info.toggleEl.textContent = "▶";
+        for (const row of info.allDescendantRows) row.style.display = "none";
+      }
       notifyChange();
     },
 
@@ -137,14 +180,14 @@ export function initLegend(
 
     setSearchResults(matches: ByteRange[], activeRange: ByteRange | null): void {
       for (const tr of searchHighlightedTrs) {
-        tr.classList.remove("legend-search-match", "legend-search-active");
+        tr.classList.remove("annotation-search-match", "annotation-search-active");
       }
       searchHighlightedTrs = [];
 
       for (const range of matches) {
         const tr = rangeToTr.get(range);
         if (tr) {
-          tr.classList.add("legend-search-match");
+          tr.classList.add("annotation-search-match");
           searchHighlightedTrs.push(tr);
         }
       }
@@ -152,14 +195,14 @@ export function initLegend(
       if (activeRange !== null) {
         const tr = rangeToTr.get(activeRange);
         if (tr) {
-          tr.classList.add("legend-search-active");
+          tr.classList.add("annotation-search-active");
           searchHighlightedTrs.push(tr);
         }
       }
     },
   };
 
-  // ── Table click handler — scroll hex to clicked range ──
+  // ── Table click handler — fire onClickRange for navigation ──
   table.addEventListener("click", (e) => {
     const tr = (e.target as HTMLElement).closest<HTMLTableRowElement>("tr[data-byteoffset]");
     if (!tr) return;
@@ -214,7 +257,7 @@ function buildRows(
   const hasChildren = range.kind === "group" && range.children.length > 0;
 
   const tr = document.createElement("tr");
-  tr.className = hasChildren ? "legend-row legend-group-row" : "legend-row";
+  tr.className = hasChildren ? "annotation-row annotation-group-row" : "annotation-row";
   tr.setAttribute("data-byteoffset", String(range.start));
   tr.setAttribute("data-rangeend",   String(range.end));
   const existing = rowMap.get(range.start);
@@ -225,7 +268,7 @@ function buildRows(
 
   // ── Swatch — all rows get their own color ──
   const swatchTd = document.createElement("td");
-  swatchTd.className = "legend-swatch";
+  swatchTd.className = "annotation-swatch";
   const dot = document.createElement("div");
   dot.className = "swatch-dot";
   dot.style.background = colorForLabel(range.label);
@@ -234,18 +277,18 @@ function buildRows(
 
   // ── Size ──
   const sizeTd = document.createElement("td");
-  sizeTd.className = "legend-size";
+  sizeTd.className = "annotation-size";
   sizeTd.textContent = formatSize(range.end - range.start);
   tr.appendChild(sizeTd);
 
   // ── Name ──
   const nameTd = document.createElement("td");
-  nameTd.className = "legend-name";
+  nameTd.className = "annotation-name";
   nameTd.style.paddingLeft = `${depth * 12 + 4}px`;
   if (hasChildren) {
     nameTd.appendChild(document.createTextNode(range.label + " "));
     const toggle = document.createElement("span");
-    toggle.className = "legend-toggle";
+    toggle.className = "annotation-toggle";
     toggle.textContent = "▶";
     nameTd.appendChild(toggle);
   } else {
@@ -255,7 +298,7 @@ function buildRows(
 
   // ── Value ──
   const valueTd = document.createElement("td");
-  valueTd.className = "legend-value";
+  valueTd.className = "annotation-value";
   valueTd.textContent = valueStr(range);
   tr.appendChild(valueTd);
 
@@ -277,17 +320,18 @@ function buildRows(
 
     for (const row of allDescendantRows) row.style.display = "none";
 
-    const toggleEl = nameTd.querySelector<HTMLElement>(".legend-toggle")!;
+    const toggleEl = nameTd.querySelector<HTMLElement>(".annotation-toggle")!;
 
     rangeToRowInfo.set(range, { directChildRows, allDescendantRows, toggleEl });
 
-    tr.addEventListener("click", () => {
+    // Double-click: toggle expand/collapse
+    tr.addEventListener("dblclick", () => {
       const isExpanded = directChildRows.length > 0 && directChildRows[0]!.style.display !== "none";
       if (isExpanded) {
         toggleEl.textContent = "▶";
         for (const row of allDescendantRows) {
           row.style.display = "none";
-          const innerToggle = row.querySelector<HTMLElement>(".legend-toggle");
+          const innerToggle = row.querySelector<HTMLElement>(".annotation-toggle");
           if (innerToggle) innerToggle.textContent = "▶";
         }
         removeDescendantsFromExpanded(range, expandedRanges);
