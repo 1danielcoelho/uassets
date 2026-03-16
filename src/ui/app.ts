@@ -1,7 +1,7 @@
 import type { ParseResult, ByteRange } from "../types.ts";
 import { DEFAULT_OPTIONS } from "../types.ts";
 import { parseUAsset } from "../parser/parser.ts";
-import { initHexView } from "./hex-view.ts";
+import { initHexView, hexColumnWidth } from "./hex-view.ts";
 import { initLegend, type LegendHandle } from "./legend.ts";
 import { formatSize, escHtml, findMatches, findLegendMatches, findAddressMatches, type HexViewHandle } from "./utils.ts";
 
@@ -9,6 +9,7 @@ import { formatSize, escHtml, findMatches, findLegendMatches, findAddressMatches
 
 const hexPanel     = document.getElementById("hex-panel")!;
 const hexColHeader = document.getElementById("hex-col-header")!;
+const hexColumn    = document.getElementById("hex-column")!;
 const summaryPanel = document.getElementById("summary-panel")!;
 const legendPanel  = document.getElementById("legend-panel")!;
 const menuFile     = document.getElementById("menu-file")!;
@@ -277,6 +278,7 @@ async function openFile(file: File): Promise<void> {
   searchInput.value = "";
 
   renderSummary(result, file);
+  hexColumn.style.width = `${hexColumnWidth(DEFAULT_OPTIONS.bytesPerRow)}px`;
   hexHandle    = initHexView(hexPanel, hexColHeader, buffer, result, DEFAULT_OPTIONS);
   legendHandle = initLegend(legendPanel, result.ranges, hexHandle.updateColorMap);
 

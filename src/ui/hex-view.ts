@@ -14,6 +14,15 @@ const BYTE_GAP_W   = 2;   // px — gap in .bytes flex container
 const MID_GAP_W    = 6;   // px — extra gap after 8th byte (.b.mid margin-right)
 const ASCII_CELL_W = 8;   // px — must match .c width in CSS
 const ADDR_COL_W   = 82;  // px — must match .addr width in CSS
+const HEX_PANEL_H_PAD = 24; // px — left+right padding of #hex-panel (2×12px)
+const HEX_ROW_GAP     = 16; // px — gap between columns in .hex-row
+
+/** Width (px) the #hex-column should be set to for a given bytesPerRow. */
+export function hexColumnWidth(bytesPerRow: number): number {
+  const bytesColWidth = bytesPerRow * BYTE_CELL_W + (bytesPerRow - 1) * BYTE_GAP_W + MID_GAP_W;
+  const asciiColWidth = bytesPerRow * ASCII_CELL_W;
+  return ADDR_COL_W + HEX_ROW_GAP + bytesColWidth + HEX_ROW_GAP + asciiColWidth + HEX_PANEL_H_PAD;
+}
 
 // ── Row HTML builder ──────────────────────────────────────────────────────────
 
