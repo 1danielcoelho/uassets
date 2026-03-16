@@ -94,6 +94,8 @@
         overflow: hidden;
       }
 
+      #hex-col-header.hidden { display: none; }
+
       #hex-col-header {
         display: flex;
         align-items: center;
@@ -217,6 +219,34 @@
       .placeholder {
         color: #555;
         font-size: 12px;
+      }
+
+      .welcome {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+        padding: 24px;
+        gap: 12px;
+      }
+      .example-btns {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+      .example-btn {
+        background: #2a2a2a;
+        border: 1px solid #444;
+        color: #ccc;
+        padding: 4px 10px;
+        border-radius: 3px;
+        cursor: pointer;
+        font-size: 12px;
+        font-family: monospace;
+      }
+      .example-btn:hover {
+        background: #3a3a3a;
+        border-color: #666;
+        color: #fff;
       }
 
       /* ── Legend table ── */
@@ -438,7 +468,7 @@
     <div id="content">
       <div id="hex-column">
         <div id="hex-col-header"></div>
-        <div id="hex-panel"><span class="placeholder">Drop a .uasset/.umap file or use File → Open</span></div>
+        <div id="hex-panel"></div>
       </div>
       <div id="right-panel">
         <div id="summary-panel"><span class="placeholder">No file loaded</span></div>

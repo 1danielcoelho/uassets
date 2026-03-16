@@ -278,6 +278,7 @@ async function openFile(file: File): Promise<void> {
   searchInput.value = "";
 
   renderSummary(result, file);
+  hexColHeader.classList.remove("hidden");
   hexColumn.style.width = `${hexColumnWidth(DEFAULT_OPTIONS.bytesPerRow)}px`;
   hexHandle    = initHexView(hexPanel, hexColHeader, buffer, result, DEFAULT_OPTIONS);
   legendHandle = initLegend(legendPanel, result.ranges, hexHandle.updateColorMap);
@@ -336,11 +337,46 @@ function metaLine(label: string, value: string): string {
   return `<div class="meta-line"><span class="meta-label">${escHtml(label)}: </span>${escHtml(value)}</div>`;
 }
 
-// ── Dev: auto-load test asset ─────────────────────────────────────────────────
+// ── Welcome screen ────────────────────────────────────────────────────────────
 
-if (location.hostname === "localhost" || location.hostname === "127.0.0.1") {
-  fetch("/test/assets/5_7_3/SM_cube.uasset")
-    .then(r => r.ok ? r.arrayBuffer() : Promise.reject())
-    .then(buf => openFile(new File([buf], "SM_cube.uasset")))
-    .catch(() => { /* file missing — silently skip */ });
+const EXAMPLE_ASSETS: { file: string; label: string }[] = [
+  { file: "SM_cube.uasset",           label: "Static Mesh"       },
+  { file: "Blueprint.uasset",         label: "Blueprint"         },
+  { file: "M_CustomMaterial.uasset",  label: "Material"          },
+  { file: "MI_TextureMaterial.uasset",label: "Material Instance" },
+  { file: "MyMap.umap",               label: "Level"             },
+  { file: "T_shapes.uasset",          label: "Texture"           },
+];
+
+function showWelcome(): void {
+  hexColHeader.classList.add("hidden");
+  const btns = EXAMPLE_ASSETS.map(({ file, label }) =>
+    `<button class="example-btn" data-asset="${escHtml(file)}">${escHtml(label)}</button>`
+  ).join("");
+  hexPanel.innerHTML =
+    `<div class="welcome">` +
+    `<p class="placeholder">Use <strong>File → Open</strong> or drag-and-drop a <code>.uasset</code> / <code>.umap</code> file,` +
+    ` or open one of the bundled examples:</p>` +
+    `<div class="example-btns">${btns}</div>` +
+    `</div>`;
+  hexPanel.querySelectorAll<HTMLButtonElement>(".example-btn").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const name = btn.dataset.asset!;
+      fetch(`/test/assets/5_7_3/${name}`)
+        .then(r => r.ok ? r.arrayBuffer() : Promise.reject(new Error(`HTTP ${r.status}`)))
+        .then(buf => openFile(new File([buf], name)))
+        .catch(err => alert(`Could not load example asset: ${err.message}`));
+    });
+  });
 }
+
+showWelcome();
+
+// ── Dev: auto-load test asset (disabled — use example buttons above) ──────────
+
+// if (location.hostname === "localhost" || location.hostname === "127.0.0.1") {
+//   fetch("/test/assets/5_7_3/SM_cube.uasset")
+//     .then(r => r.ok ? r.arrayBuffer() : Promise.reject())
+//     .then(buf => openFile(new File([buf], "SM_cube.uasset")))
+//     .catch(() => { /* file missing — silently skip */ });
+// }
