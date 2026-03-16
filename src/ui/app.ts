@@ -321,28 +321,35 @@ function renderSummary(result: ParseResult, file: File): void {
     ? metaLine("Modified", new Date(file.lastModified).toLocaleString())
     : "";
 
-  const textHtml = [
-    `<div class="asset-class">${escHtml(file.name)}</div>`,
+  const metaHtml = [
     metaLine("File size",       formatSize(totalBytes)),
     modifiedLine,
     metaLine("Content path",    path),
     metaLine("Engine version",  summary.engineVersion || "—"),
     ...summary.properties.map(p => metaLine(p.label, p.value)),
   ].join("");
+  const textHtml =
+    `<div class="asset-class">${escHtml(file.name)}</div>` +
+    `<div class="summary-meta">${metaHtml}</div>`;
 
   if (currentThumbUrl) { URL.revokeObjectURL(currentThumbUrl); currentThumbUrl = null; }
 
+  let thumbInnerHtml: string;
   if (summary.thumbnail) {
     const blob = new Blob([summary.thumbnail.data.buffer.slice(0) as ArrayBuffer], { type: summary.thumbnail.mimeType });
     currentThumbUrl = URL.createObjectURL(blob);
     const { width, height } = summary.thumbnail;
-    const thumbHtml = `<img class="summary-thumb" src="${currentThumbUrl}" ` +
-                           `alt="Thumbnail ${width}×${height}" title="${width}×${height}">`;
-    const splitIdx = textHtml.indexOf("</div>") + "</div>".length;
-    summaryPanel.innerHTML = textHtml.slice(0, splitIdx) + thumbHtml + textHtml.slice(splitIdx);
+    thumbInnerHtml = `<img class="summary-thumb" src="${currentThumbUrl}" ` +
+                          `alt="Thumbnail ${width}×${height}" title="${width}×${height}">`;
   } else {
-    summaryPanel.innerHTML = textHtml;
+    thumbInnerHtml = `<div class="summary-thumb-placeholder" title="No embedded thumbnail"></div>`;
   }
+
+  summaryPanel.innerHTML =
+    `<div class="summary-body">` +
+      `<div class="summary-thumb-container">${thumbInnerHtml}</div>` +
+      `<div class="summary-text">${textHtml}</div>` +
+    `</div>`;
 }
 
 function metaLine(label: string, value: string): string {
