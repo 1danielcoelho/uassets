@@ -312,11 +312,7 @@ export function initHexView(
     },
 
     scrollToOffset(offset: number): void {
-      const rowTop    = Math.floor(offset / bytesPerRow) * ROW_HEIGHT;
-      const rowBottom = rowTop + ROW_HEIGHT;
-      const viewTop    = container.scrollTop;
-      const viewBottom = viewTop + container.clientHeight;
-      if (rowTop >= viewTop && rowBottom <= viewBottom) return;
+      const rowTop      = Math.floor(offset / bytesPerRow) * ROW_HEIGHT;
       const centeredTop = rowTop - Math.floor((container.clientHeight - ROW_HEIGHT) / 2);
       container.scrollTo({ top: Math.max(0, centeredTop), behavior: "smooth" });
     },

@@ -5,6 +5,9 @@ import {
   type ColoredRange, type ViewerHandle, type HoverRange,
 } from "./utils.ts";
 
+// ── Cleanup controller — aborted when initAnnotation is called again ──────────
+let cleanupController: AbortController | null = null;
+
 // ── Public types ──────────────────────────────────────────────────────────────
 
 export interface AnnotationHandle extends ViewerHandle {
@@ -33,6 +36,13 @@ export function initAnnotation(
   ranges: ByteRange[],
   onColorMapChange?: (ranges: ColoredRange[]) => void,
 ): AnnotationHandle {
+  // Abort previous instance's global listeners and remove its context menu.
+  cleanupController?.abort();
+  cleanupController = new AbortController();
+  const { signal } = cleanupController;
+
+  document.getElementById("annotation-ctx-menu")?.remove();
+
   container.innerHTML = "";
   const table = document.createElement("table");
   table.className = "annotation-table";
@@ -151,14 +161,11 @@ export function initAnnotation(
     scrollToRange(range: ByteRange): void {
       const tr = rangeToTr.get(range);
       if (!tr) return;
-      const containerRect = container.getBoundingClientRect();
-      const trRect        = tr.getBoundingClientRect();
-      const visibleTop    = containerRect.top;
-      const visibleBottom = containerRect.bottom;
-      if (trRect.top >= visibleTop && trRect.bottom <= visibleBottom) return;
-      const visibleHeight  = visibleBottom - visibleTop;
+      const containerRect  = container.getBoundingClientRect();
+      const trRect         = tr.getBoundingClientRect();
+      const visibleHeight  = containerRect.bottom - containerRect.top;
       const rowHeight      = trRect.bottom - trRect.top;
-      const absoluteRowTop = container.scrollTop + trRect.top - visibleTop;
+      const absoluteRowTop = container.scrollTop + trRect.top - containerRect.top;
       const centeredTop    = absoluteRowTop - (visibleHeight - rowHeight) / 2;
       container.scrollTo({ top: Math.max(0, centeredTop), behavior: "smooth" });
     },
@@ -202,13 +209,125 @@ export function initAnnotation(
     },
   };
 
-  // ── Table click handler — fire onClickRange for navigation ──
+  // ── Table click handler — group rows toggle expand/collapse; leaf rows do nothing ──
   table.addEventListener("click", (e) => {
     const tr = (e.target as HTMLElement).closest<HTMLTableRowElement>("tr[data-byteoffset]");
-    if (!tr) return;
+    if (!tr || !tr.classList.contains("annotation-group-row")) return;
     const range = trToRange.get(tr);
-    if (range) handle.onClickRange?.(range);
+    if (range) handle.toggleRange(range);
   });
+
+  // ── Context menu — right-click any row to get navigation options ──
+  const ctxMenu = document.createElement("div");
+  ctxMenu.id = "annotation-ctx-menu";
+  ctxMenu.className = "ctx-menu";
+  ctxMenu.innerHTML = `
+    <div class="ctx-menu-item" data-action="scroll-to">View bytes</div>
+    <div class="ctx-menu-divider"></div>
+    <div class="ctx-menu-item" data-action="expand">Expand</div>
+    <div class="ctx-menu-item" data-action="expand-recursive">Expand recursively</div>
+    <div class="ctx-menu-item" data-action="collapse">Collapse</div>
+    <div class="ctx-menu-item" data-action="collapse-parent">Collapse parent</div>
+  `;
+  document.body.appendChild(ctxMenu);
+
+  const ctxItems = new Map<string, HTMLElement>();
+  for (const el of ctxMenu.querySelectorAll<HTMLElement>(".ctx-menu-item")) {
+    ctxItems.set(el.dataset["action"]!, el);
+  }
+
+  let ctxMenuRange: ByteRange | null = null;
+
+  table.addEventListener("contextmenu", (e) => {
+    const tr = (e.target as HTMLElement).closest<HTMLTableRowElement>("tr[data-byteoffset]");
+    if (!tr) return;
+    e.preventDefault();
+    ctxMenuRange = trToRange.get(tr) ?? null;
+    if (!ctxMenuRange) return;
+
+    const r = ctxMenuRange;
+    const isGroup    = r.kind === "group";
+    const info       = rangeToRowInfo.get(r);
+    const isExpanded = isGroup && (info?.directChildRows[0]?.style.display !== "none" ?? false);
+    const hasParent  = rangeToParent.has(r);
+
+    const setDisabled = (action: string, disabled: boolean) =>
+      ctxItems.get(action)?.classList.toggle("disabled", disabled);
+
+    setDisabled("expand",           !isGroup || isExpanded);
+    setDisabled("expand-recursive", !isGroup);
+    setDisabled("collapse",         !isGroup || !isExpanded);
+    setDisabled("collapse-parent",  !hasParent);
+
+    ctxMenu.style.left = `${e.clientX}px`;
+    ctxMenu.style.top  = `${e.clientY}px`;
+    ctxMenu.classList.add("visible");
+  });
+
+  ctxMenu.addEventListener("click", (e) => {
+    const item = (e.target as HTMLElement).closest<HTMLElement>(".ctx-menu-item");
+    if (!item || item.classList.contains("disabled")) {
+      ctxMenu.classList.remove("visible");
+      ctxMenuRange = null;
+      return;
+    }
+    const r = ctxMenuRange;
+    if (r) {
+      switch (item.dataset["action"]) {
+        case "scroll-to":
+          handle.onClickRange?.(r);
+          break;
+        case "expand":
+          handle.expandRange(r);
+          break;
+        case "expand-recursive": {
+          if (r.kind !== "group") break;
+          const info = rangeToRowInfo.get(r);
+          if (!info) break;
+          const descRowSet = new Set(info.allDescendantRows);
+          info.toggleEl.textContent = "▼";
+          for (const row of info.allDescendantRows) {
+            row.style.display = "";
+            const t = row.querySelector<HTMLElement>(".annotation-toggle");
+            if (t) t.textContent = "▼";
+          }
+          expandedRanges.add(r);
+          for (const [gr, gInfo] of rangeToRowInfo) {
+            if (gInfo.directChildRows[0] && descRowSet.has(gInfo.directChildRows[0])) {
+              expandedRanges.add(gr);
+            }
+          }
+          notifyChange();
+          break;
+        }
+        case "collapse":
+          handle.toggleRange(r); // toggleRange collapses when expanded
+          break;
+        case "collapse-parent": {
+          const parent = rangeToParent.get(r);
+          if (parent) handle.toggleRange(parent);
+          break;
+        }
+      }
+    }
+    ctxMenu.classList.remove("visible");
+    ctxMenuRange = null;
+  });
+
+  window.addEventListener("click", (e) => {
+    if (!ctxMenu.classList.contains("visible")) return;
+    if (!ctxMenu.contains(e.target as Node)) {
+      ctxMenu.classList.remove("visible");
+      ctxMenuRange = null;
+    }
+  }, { signal });
+
+  window.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && ctxMenu.classList.contains("visible")) {
+      ctxMenu.classList.remove("visible");
+      ctxMenuRange = null;
+    }
+  }, { signal });
 
   // ── Table hover handlers ──
   table.addEventListener("mouseover", (e) => {
@@ -323,26 +442,6 @@ function buildRows(
     const toggleEl = nameTd.querySelector<HTMLElement>(".annotation-toggle")!;
 
     rangeToRowInfo.set(range, { directChildRows, allDescendantRows, toggleEl });
-
-    // Double-click: toggle expand/collapse
-    tr.addEventListener("dblclick", () => {
-      const isExpanded = directChildRows.length > 0 && directChildRows[0]!.style.display !== "none";
-      if (isExpanded) {
-        toggleEl.textContent = "▶";
-        for (const row of allDescendantRows) {
-          row.style.display = "none";
-          const innerToggle = row.querySelector<HTMLElement>(".annotation-toggle");
-          if (innerToggle) innerToggle.textContent = "▶";
-        }
-        removeDescendantsFromExpanded(range, expandedRanges);
-        notifyChange();
-      } else {
-        toggleEl.textContent = "▼";
-        for (const row of directChildRows) row.style.display = "";
-        expandedRanges.add(range);
-        notifyChange();
-      }
-    });
   }
 
   return result;

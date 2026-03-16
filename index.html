@@ -330,7 +330,7 @@
         height: 22px;
       }
 
-      .annotation-row:not(.annotation-group-row) { cursor: pointer; }
+      .annotation-row:not(.annotation-group-row) { cursor: default; }
       .annotation-row:not(.annotation-group-row):hover { background: #252525; }
 
       .annotation-group-row {
@@ -525,6 +525,34 @@
       /* Annotation row highlight (driven by hex hover) */
       .annotation-row.hovered:not(.annotation-group-row) { background: #2a2a2a; }
       .annotation-group-row.hovered                       { background: #313131; }
+
+      /* ── Right-click context menu ── */
+      .ctx-menu {
+        position: fixed;
+        z-index: 500;
+        display: none;
+        background: #2d2d2d;
+        border: 1px solid #555;
+        border-radius: 4px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+        padding: 4px 0;
+        min-width: 160px;
+      }
+      .ctx-menu.visible { display: block; }
+      .ctx-menu-divider {
+        height: 1px;
+        background: #444;
+        margin: 4px 0;
+      }
+      .ctx-menu-item {
+        padding: 6px 14px;
+        cursor: pointer;
+        color: #ccc;
+        font-size: 12px;
+        white-space: nowrap;
+      }
+      .ctx-menu-item:not(.disabled):hover { background: #3a3a3a; }
+      .ctx-menu-item.disabled { color: #555; cursor: default; }
     </style>
   </head>
   <body>

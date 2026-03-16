@@ -295,17 +295,13 @@ async function openFile(file: File): Promise<void> {
   hexHandle.onHoverChange        = annotationHandle.setHovered.bind(annotationHandle);
   annotationHandle.onHoverChange = hexHandle.setHovered.bind(hexHandle);
 
-  // Hex single click → scroll annotation to that row (navigate only, no expand).
+  // Hex single click → expand the clicked range (if a group) + expand ancestors + scroll to it.
   hexHandle.onClickRange = (range) => {
-    annotationHandle!.scrollToRange(range);
+    annotationHandle!.expandRange(range);
+    annotationHandle!.expandAndScrollToRange(range);
   };
 
-  // Hex double click → toggle expand/collapse of the annotation group.
-  hexHandle.onDblClickRange = (range) => {
-    annotationHandle!.toggleRange(range);
-  };
-
-  // Annotation click → scroll hex view to that range's start offset.
+  // Annotation right-click → context menu → "Scroll hex to range" fires onClickRange.
   annotationHandle.onClickRange = (range) => hexHandle!.scrollToOffset(range.start);
 }
 
