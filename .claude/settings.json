@@ -30,6 +30,7 @@
     ],
     "additionalDirectories": [
       "/tmp"
-    ]
+    ],
+    "defaultMode": "bypassPermissions"
   }
 }

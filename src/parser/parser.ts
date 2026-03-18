@@ -33,6 +33,7 @@ import "./assets/static-mesh.ts";
 import "./assets/texture2d.ts";
 import "./assets/material.ts";
 import "./assets/world.ts";
+import "./assets/blueprint.ts";
 import { readCompressedBuffer } from "./compressed-buffer.ts";
 import { parseTaggedProperties } from "./tagged-properties.ts";
 import type { ParseResult, AssetSummary } from "../types.ts";
