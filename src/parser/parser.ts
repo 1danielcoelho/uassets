@@ -27,6 +27,7 @@ import {
   PKG_FILTER_EDITOR_ONLY,
 } from "./summary.ts";
 import type { FGuid, FObjectImport, FObjectExport } from "./types.ts";
+import type { ByteRange } from "../types.ts";
 import { resolveName, resolveClass } from "./utils.ts";
 import { dispatchExport } from "./dispatch.ts";
 import "./assets/static-mesh.ts";
@@ -815,8 +816,15 @@ export function parseUAsset(buffer: ArrayBuffer): ParseResult {
   };
 
   return {
-    ranges: r.getAnnotations(),
+    ranges: sortByOffset(r.getAnnotations()),
     totalBytes: buffer.byteLength,
     summary,
   };
+}
+
+/** Recursively sort ByteRange arrays by start offset. */
+function sortByOffset(ranges: ByteRange[]): ByteRange[] {
+  return ranges
+    .map(r => r.kind === "group" ? { ...r, children: sortByOffset(r.children) } : r)
+    .sort((a, b) => a.start - b.start);
 }
