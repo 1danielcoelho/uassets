@@ -212,9 +212,9 @@ export function valueStr(range: ByteRange): string {
     case "int8":  case "int16":  case "int32":
     case "uint8": case "uint16": case "uint32":
     case "float32": case "float64":
-      return range.value.toString();
+      return range.display ?? range.value.toString();
     case "int64": case "uint64":
-      return range.value.toString();
+      return range.display ?? range.value.toString();
     case "bytes": {
       const preview = Array.from(range.value.slice(0, 8))
         .map(b => b.toString(16).padStart(2, "0"))

@@ -13,8 +13,8 @@ interface ByteRangeBase {
 
 export type ByteRange = ByteRangeBase & (
   | { kind: "int8" | "int16" | "int32" | "uint8" | "uint16" | "uint32"
-            | "float32" | "float64";  value: number }
-  | { kind: "int64" | "uint64";       value: bigint }
+            | "float32" | "float64";  value: number; display?: string }
+  | { kind: "int64" | "uint64";       value: bigint; display?: string }
   | { kind: "bytes";                  value: Uint8Array }
   | { kind: "string";                 value: string }
   | { kind: "guid";                   value: FGuid }

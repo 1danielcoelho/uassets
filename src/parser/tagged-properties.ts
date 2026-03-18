@@ -34,6 +34,7 @@
  */
 
 import { BinaryReader } from "./reader.ts";
+import { flagsStr8, enumStr, EPropertyTagFlags, EPropertyTagExtension, EClassSerializationControlExtension } from "./enums.ts";
 
 // EPropertyTagFlags
 const FLAG_HAS_ARRAY_INDEX            = 0x01;
@@ -101,6 +102,7 @@ export function parseTaggedProperties(
   if (isUClass && fileVersionUE5 >= UE5_PROPERTY_TAG_EXTENSION_AND_OVERRIDABLE_SERIALIZATION) {
     r.group("Serialization Control Extensions", () => {
       const ctrlExt = r.readUint8("Control Extension Flags");
+      r.setLastDisplay(flagsStr8(ctrlExt, EClassSerializationControlExtension));
       if (ctrlExt & CTRL_EXT_OVERRIDABLE_SERIALIZATION) {
         r.readUint8("Overridable Operation");
       }
@@ -139,12 +141,14 @@ export function parseTaggedProperties(
 
         const size  = r.readInt32("Size");
         const flags = r.readUint8("Flags");
+        r.setLastDisplay(flagsStr8(flags, EPropertyTagFlags));
 
         if (flags & FLAG_HAS_ARRAY_INDEX)   r.readInt32("Array Index");
         if (flags & FLAG_HAS_PROPERTY_GUID) r.readFGuid("Property GUID");
         if (flags & FLAG_HAS_PROPERTY_EXTENSIONS) {
           r.group("Extensions", () => {
             const extFlags = r.readUint8("Extension Flags");
+            r.setLastDisplay(flagsStr8(extFlags, EPropertyTagExtension));
             if (extFlags & EXT_OVERRIDABLE_INFO) {
               r.readUint8("Override Operation");
               r.readUint8("Experimental Override Logic");

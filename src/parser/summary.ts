@@ -11,6 +11,7 @@
 
 import { BinaryReader } from "./reader.ts";
 import { fGuidToString, fEngineVersionToString, customVersionName } from "./utils.ts";
+import { flagsStr, EPackageFlags } from "./enums.ts";
 
 // ── EUnrealEngineObjectUE5Version (from ObjectVersion.h, sequential from 1000) ─
 
@@ -162,6 +163,7 @@ export function parsePackageFileSummary(r: BinaryReader): PackageFileSummaryData
 
   const packageName  = r.readFString("Package Name");
   const packageFlags = r.readUint32("Package Flags");
+  r.setLastDisplay(flagsStr(packageFlags, EPackageFlags));
 
   const nameCount  = r.readInt32("Name Count");
   const nameOffset = r.readInt32("Name Offset");

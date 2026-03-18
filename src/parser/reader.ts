@@ -289,6 +289,19 @@ export class BinaryReader {
     return value;
   }
 
+  /**
+   * Set the `display` string on the most recently pushed annotation.
+   * Use this immediately after a labeled read to attach a human-readable
+   * enum or flags string (e.g. "RF_Public | RF_Standalone").
+   */
+  setLastDisplay(display: string): void {
+    const last = this._annotations[this._annotations.length - 1];
+    if (last && last.kind !== "bytes" && last.kind !== "string"
+      && last.kind !== "guid" && last.kind !== "group") {
+      last.display = display;
+    }
+  }
+
   /** Return all top-level collected annotations in order. */
   getAnnotations(): ByteRange[] {
     return this._annotations;

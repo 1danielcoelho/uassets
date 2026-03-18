@@ -9,6 +9,7 @@
  */
 
 import type { BinaryReader } from "./reader.ts";
+import { enumStr, ECompressedBufferMethod } from "./enums.ts";
 
 const COMPRESSED_BUFFER_MAGIC = 0xb7756362; // ".ucb"
 
@@ -45,7 +46,8 @@ export function readCompressedBuffer(
     // ── 64-byte FHeader (big-endian) ─────────────────────────────────────────
     const magic = r.readUint32BE("Magic");
     r.readUint32BE("Crc32");
-    const method          = r.readUint8("Method");          // 0=None, 1=Oodle
+    const method          = r.readUint8("Method");
+    r.setLastDisplay(enumStr(method, ECompressedBufferMethod));
     r.readUint8("Compressor");
     r.readUint8("CompressionLevel");
     r.readUint8("BlockSizeExponent");

@@ -29,6 +29,7 @@ import {
 import type { FGuid, FObjectImport, FObjectExport } from "./types.ts";
 import type { ByteRange } from "../types.ts";
 import { resolveName, resolveClass } from "./utils.ts";
+import { flagsStr, EObjectFlags, EPackageFlags } from "./enums.ts";
 import { dispatchExport } from "./dispatch.ts";
 import "./assets/static-mesh.ts";
 import "./assets/texture2d.ts";
@@ -165,6 +166,7 @@ function parseExportsTable(
         const objectNameIdx = r.readInt32("Object Name");
         r.readInt32("Object Name Number");
         const objectFlags = r.readUint32("Object Flags");
+        r.setLastDisplay(flagsStr(objectFlags, EObjectFlags));
 
         const serialSize   = (h.fileVersionUE4 >= UE4_64BIT_EXPORTMAP_SERIALSIZES)
           ? r.readInt64("Serial Size") : BigInt(r.readInt32("Serial Size"));
@@ -187,6 +189,7 @@ function parseExportsTable(
 
         // PackageFlags — always present (even when PackageGuid was removed)
         const exportPackageFlags = r.readUint32("Package Flags");
+        r.setLastDisplay(flagsStr(exportPackageFlags, EPackageFlags));
 
         const notAlwaysLoadedForEditorGame =
           (h.fileVersionUE4 >= UE4_LOAD_FOR_EDITOR_GAME) ? r.readInt32("Not Always Loaded For Editor Game") !== 0 : false;

@@ -3,6 +3,7 @@
  */
 
 import type { BinaryReader } from "./reader.ts";
+import { flagsStr8, EStripDataGlobalFlags } from "./enums.ts";
 import type { FGuid, FEngineVersion, FObjectImport, FObjectExport } from "./types.ts";
 import { parseTaggedProperties } from "./tagged-properties.ts";
 import { CUSTOM_VERSION_GUIDS } from "./custom-version-guids.ts";
@@ -95,10 +96,12 @@ export function readPackageIndex(r: BinaryReader, label: string): number {
 export interface StripFlags { globalFlags: number; classFlags: number; }
 
 export function readStripDataFlags(r: BinaryReader, label = "Strip Data Flags"): StripFlags {
-  return r.group(label, () => ({
-    globalFlags: r.readUint8("Global Strip Flags"),
-    classFlags:  r.readUint8("Class Strip Flags"),
-  }));
+  return r.group(label, () => {
+    const globalFlags = r.readUint8("Global Strip Flags");
+    r.setLastDisplay(flagsStr8(globalFlags, EStripDataGlobalFlags));
+    const classFlags = r.readUint8("Class Strip Flags");
+    return { globalFlags, classFlags };
+  });
 }
 
 export function isEditorDataStripped(sf: StripFlags): boolean { return (sf.globalFlags & 1) !== 0; }

@@ -16,6 +16,7 @@
  */
 
 import type { BinaryReader } from "../reader.ts";
+import { flagsStr, EEditorBulkDataFlags } from "../enums.ts";
 import { registerParser } from "../dispatch.ts";
 import {
   GUID_FUE5MainStreamObjectVersion,
@@ -50,6 +51,7 @@ const EDITOR_BULK_FLAG_IsCooked               = 0x100;
 function readEditorBulkDataRef(r: BinaryReader, label: string): void {
   r.group(label, () => {
     const flags = r.readUint32("EFlags");
+    r.setLastDisplay(flagsStr(flags, EEditorBulkDataFlags));
     const inTrailer     = (flags & EDITOR_BULK_FLAG_StoredInPackageTrailer) !== 0;
     const isVirtualized = (flags & EDITOR_BULK_FLAG_IsVirtualized) !== 0;
     const isCooked      = (flags & EDITOR_BULK_FLAG_IsCooked) !== 0;
