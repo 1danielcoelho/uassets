@@ -11,6 +11,7 @@
 import { readFileSync } from "fs";
 import type { ByteRange, ParseResult } from "../types.ts";
 import { fGuidToString } from "../parser/utils.ts";
+import { CUSTOM_VERSION_GUIDS } from "../parser/custom-version-guids.ts";
 import { parseUAsset } from "../parser/parser.ts";
 
 // ── Entry point ───────────────────────────────────────────────────────────────
@@ -60,7 +61,8 @@ console.log(`  Engine      : ${summary.engineVersion}`);
 if (summary.customVersions.length > 0) {
   console.log(`  Custom vers : ${summary.customVersions.length} entries`);
   for (const cv of summary.customVersions) {
-    console.log(`    ${cv.name}  v${cv.version}`);
+    const friendly = CUSTOM_VERSION_GUIDS[cv.name.toLowerCase()] ?? cv.name;
+    console.log(`    ${friendly}  v${cv.version}`);
   }
 }
 if (summary.properties.length > 0) {

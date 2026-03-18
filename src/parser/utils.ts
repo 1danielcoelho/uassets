@@ -5,11 +5,18 @@
 import type { BinaryReader } from "./reader.ts";
 import type { FGuid, FEngineVersion, FObjectImport, FObjectExport } from "./types.ts";
 import { parseTaggedProperties } from "./tagged-properties.ts";
+import { CUSTOM_VERSION_GUIDS } from "./custom-version-guids.ts";
 
 export function fGuidToString(g: FGuid): string {
   return [g.a, g.b, g.c, g.d]
     .map(n => n.toString(16).padStart(8, "0").toUpperCase())
     .join("-");
+}
+
+/** Returns friendly name for a custom version GUID, e.g. "Dev-Blueprints", or the raw GUID string if unknown. */
+export function customVersionName(g: FGuid): string {
+  const key = fGuidToString(g).toLowerCase();
+  return CUSTOM_VERSION_GUIDS[key] ?? fGuidToString(g);
 }
 
 export function fEngineVersionToString(v: FEngineVersion): string {

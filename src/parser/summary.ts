@@ -10,7 +10,7 @@
  */
 
 import { BinaryReader } from "./reader.ts";
-import { fGuidToString, fEngineVersionToString } from "./utils.ts";
+import { fGuidToString, fEngineVersionToString, customVersionName } from "./utils.ts";
 
 // ── EUnrealEngineObjectUE5Version (from ObjectVersion.h, sequential from 1000) ─
 
@@ -146,7 +146,8 @@ export function parsePackageFileSummary(r: BinaryReader): PackageFileSummaryData
         r.group(`Custom Version [${i}]`, () => {
           cvGuid = r.readFGuid("GUID");
           cvVer  = r.readInt32("Version");
-          return `${fGuidToString(cvGuid)} v${cvVer}`;
+          const label = customVersionName(cvGuid);
+          return `${label} v${cvVer}`;
         });
         result.push({ name: fGuidToString(cvGuid), version: cvVer });
       }
