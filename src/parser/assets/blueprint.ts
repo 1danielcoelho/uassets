@@ -52,67 +52,7 @@
 
 import type { BinaryReader } from "../reader.ts";
 import { registerParser } from "../dispatch.ts";
-import { parseTaggedProperties } from "../tagged-properties.ts";
-
-// ── Helpers ───────────────────────────────────────────────────────────────────
-
-function readBool32(r: BinaryReader, label: string): boolean {
-  return r.readUint32(label) !== 0;
-}
-
-function readFGuid(r: BinaryReader, label: string): string {
-  return r.group(label, () => {
-    const a = r.readUint32("A");
-    const b = r.readUint32("B");
-    const c = r.readUint32("C");
-    const d = r.readUint32("D");
-    return [a, b, c, d].map(n => n.toString(16).padStart(8, "0").toUpperCase()).join("-");
-  });
-}
-
-function readObjectGuid(r: BinaryReader): void {
-  r.group("Object GUID (Lazy Ptr)", () => {
-    const hasGuid = readBool32(r, "Has GUID");
-    if (hasGuid) readFGuid(r, "GUID");
-  });
-}
-
-// ── Shared export-entry boilerplate ──────────────────────────────────────────
-
-/**
- * Standard entry point pattern: optional Export Header + Properties + tail fn.
- */
-function parseExport(
-  r: BinaryReader,
-  offset: number,
-  size: number,
-  names: string[],
-  fileVersionUE5: number,
-  scriptStart: number,
-  scriptEnd: number,
-  parseTailFn: (absEnd: number) => void,
-): void {
-  const absScriptStart = offset + scriptStart;
-  const absScriptEnd   = offset + scriptEnd;
-  const absEnd         = offset + size;
-
-  if (scriptStart > 0) {
-    r.seek(offset);
-    r.readBytes(scriptStart, "Export Header");
-  }
-
-  if (absScriptEnd > absScriptStart) {
-    r.seek(absScriptStart);
-    r.group("Properties", () => {
-      parseTaggedProperties(r, names, absScriptEnd, fileVersionUE5);
-    });
-  }
-
-  if (absEnd > absScriptEnd) {
-    r.seek(absScriptEnd);
-    parseTailFn(absEnd);
-  }
-}
+import { readObjectGuid, parseExport } from "../utils.ts";
 
 // ── Tail parsers ──────────────────────────────────────────────────────────────
 

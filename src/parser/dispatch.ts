@@ -54,7 +54,3 @@ export function dispatchExport(
   }
   return false;
 }
-
-// ── Import asset parsers (add more files here as they are implemented) ────────
-// Parsers are imported by parser.ts to avoid circular module dependencies.
-// import "./assets/texture2d.ts";
