@@ -305,19 +305,16 @@ function parseIndexTables(
   }
 
   // Soft Package References — UE4 >= 384.
+  // These are TArray<FName> — each entry is a package name (ONE FName = 2 int32s).
+  // Not to be confused with SoftObjectPaths (which are FSoftObjectPath structs).
   if (h.softPackageRefsOffset > 0 && h.softPackageRefsCount > 0) {
     r.seek(h.softPackageRefsOffset);
     r.group("Soft Package References", () => {
       for (let i = 0; i < h.softPackageRefsCount; i++) {
         r.group(`SoftRef[${i}]`, () => {
-          const pkgIdx   = r.readInt32("Package Name Index");
-                           r.readInt32(); // package name number
-          const assetIdx = r.readInt32("Asset Name Index");
-                           r.readInt32(); // asset name number
-          const subPath  = r.readFString("Sub Path");
-          const pkg   = resolveName(names, pkgIdx);
-          const asset = resolveName(names, assetIdx);
-          return subPath ? `${pkg}.${asset}:${subPath}` : `${pkg}.${asset}`;
+          const nameIdx = r.readInt32("Name Index");
+                         r.readInt32(); // name number
+          return resolveName(names, nameIdx);
         });
       }
     });

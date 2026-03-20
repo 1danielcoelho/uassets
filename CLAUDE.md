@@ -131,7 +131,7 @@ Menu bar items:
 
 ## State of parser
 
-The parser is fully refactored and all 6 test assets pass (6/6).
+The parser is fully refactored and all 18 test assets pass (18/18): 6 for UE 5.5.4, 6 for UE 5.6.1, 6 for UE 5.7.3.
 
 **Parser file layout:**
 - `src/parser/types.ts` — UE primitive interfaces (FGuid, FEngineVersion, FObjectExport, FObjectImport, etc.)
@@ -158,9 +158,23 @@ The parser is fully refactored and all 6 test assets pass (6/6).
 - PackageTrailer (FHeader + FLookupTableEntry × N + payload blobs + FFooter)
 - Exports group → per-export group → Properties group → per-property group + Export Tail
 
+## UE version support notes
+
+The parser handles UE5 assets across different engine versions via `fileVersionUE4` and `fileVersionUE5` checks:
+
+- **fileVersionUE4** = 522 for all UE5 assets we've seen (UE4 was at version 522 when UE5 was forked)
+- **fileVersionUE5** is the primary discriminator for UE5 feature gates (1000+)
+- **legacyFileVersion** = -8 for UE 5.5.x, -9 for UE 5.6+; -8 means UE5 version field exists but without PACKAGE_SAVED_HASH
+
+Key version thresholds tested and verified:
+- 5.5.4 → fileVersionUE5=1013: no METADATA_SERIALIZATION_OFFSET(1014), VERSE_CELLS(1015), PACKAGE_SAVED_HASH(1016)
+- 5.6.1 → fileVersionUE5=1017: has all above, no IMPORT_TYPE_HIERARCHIES(1018)
+- 5.7.3 → fileVersionUE5=1018: has all features
+
+Key format bug fixed: **Soft Package References** are `TArray<FName>` (2 int32s each = name table index + number), NOT `FSoftObjectPath` (4 int32s + FString). Previously we were reading them as soft object paths which caused out-of-bounds crashes on any asset with soft package references.
+
 ## Next steps
 
-- **Support for other engine versions**: We mostly support 5.7.3 right now, but serialization formats change with different versions. Ideally we should be able to deserialize assets from other older UE versions (down to 5.0 maybe?). These assets are "forwards compatible" in UE (a 5.0 asset should open in 5.7.3 for example), so the UE source code in this workspace *should* be capable of deserializing all of these different versions, it just does so by having lots of `if`s and conditionals on the different serialization versions and so on, and we'll basically have to update our parser code to handle that
 - **Test with cooked assets**: Cooked assets have different kinds of data in them. We should have some samples of assets cooked for a game (maybe the same asset types?)
 - **Reverse Oodle compression of package trailer data**: The editor data for a static mesh asset (in the package trailer) is Oodle compressed: We can only parse some primitive compressed headers. It would be cool if we could uncompress it to show the underlying data somehow, maybe? Not sure if I want this though, because at that point we're not really showing the file contents anymore, are we?
 - **Display enums as strings on the annotation view**: Whenever we have enums or flag values deserialized, we should display the string value too (e.g. "3 (EMethod::Oodle)" instead of just "3", or maybe Public | Standalone, etc. instead of just "0" for package flags)
