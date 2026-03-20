@@ -78,19 +78,22 @@ Bun.serve({
     const rootPath = `.${url.pathname}`;
 
     let file = Bun.file(distPath);
-    if (!(await file.exists())) file = Bun.file(rootPath);
+    let filePath = distPath;
+    if (!(await file.exists())) {
+      file = Bun.file(rootPath);
+      filePath = rootPath;
+    }
     if (!(await file.exists())) {
       return new Response("Not found", { status: 404 });
     }
-    const filePath = distPath;
 
     // Inject reload snippet into HTML responses
     if (filePath.endsWith(".html")) {
       const html = (await file.text()).replace("</body>", `${RELOAD_SNIPPET}</body>`);
-      return new Response(html, { headers: { "Content-Type": "text/html" } });
+      return new Response(html, { headers: { "Content-Type": "text/html", "Cache-Control": "no-cache" } });
     }
 
-    return new Response(file);
+    return new Response(file, { headers: { "Cache-Control": "no-cache" } });
   },
 });
 
