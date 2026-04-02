@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "bun dev.ts",
-    "build": "bun build index.html --outdir dist --minify",
+    "build": "bun build index.html --outdir dist --minify && cp -r examples dist/examples",
     "test": "bun test .test",
     "dump": "bun run src/cli/dump.ts"
   },

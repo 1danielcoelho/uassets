@@ -372,7 +372,7 @@ const EXAMPLE_ASSETS: { file: string; label: string }[] = [
 
 function loadExampleAsset(name: string): void {
   dropdownFile.classList.remove("open");
-  fetch(`/test/assets/5_7_3/${name}`)
+  fetch(`examples/${name}`)
     .then(r => r.ok ? r.arrayBuffer() : Promise.reject(new Error(`HTTP ${r.status}`)))
     .then(buf => openFile(new File([buf], name)))
     .catch(err => alert(`Could not load example asset: ${err.message}`));
@@ -412,7 +412,7 @@ showWelcome();
 // ── Dev: auto-load test asset (disabled — use example buttons above) ──────────
 
 if (location.hostname === "localhost" || location.hostname === "127.0.0.1") {
-  fetch("/test/assets/5_7_3/SM_cube.uasset")
+  fetch("examples/SM_cube.uasset")
     .then(r => r.ok ? r.arrayBuffer() : Promise.reject())
     .then(buf => openFile(new File([buf], "SM_cube.uasset")))
     .catch(() => { /* file missing — silently skip */ });
