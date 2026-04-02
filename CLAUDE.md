@@ -160,18 +160,52 @@ The parser is fully refactored and all 18 test assets pass (18/18): 6 for UE 5.5
 
 ## UE version support notes
 
-The parser handles UE5 assets across different engine versions via `fileVersionUE4` and `fileVersionUE5` checks:
+The parser handles UE4 and UE5 assets via `fileVersionUE4`, `fileVersionUE5`, and `legacyFileVersion` checks:
 
-- **fileVersionUE4** = 522 for all UE5 assets we've seen (UE4 was at version 522 when UE5 was forked)
-- **fileVersionUE5** is the primary discriminator for UE5 feature gates (1000+)
-- **legacyFileVersion** = -8 for UE 5.5.x, -9 for UE 5.6+; -8 means UE5 version field exists but without PACKAGE_SAVED_HASH
+- **fileVersionUE4** = 522 for all UE5 assets (UE4 was at version 522 when UE5 was forked)
+- **fileVersionUE5** is the primary discriminator for UE5 feature gates (1000+); 0 for UE4 assets
+- **legacyFileVersion**: -7 for UE4 assets, -8 for UE5 up to 5.5.x, -9 for UE5 5.6+
 
-Key version thresholds tested and verified:
-- 5.5.4 → fileVersionUE5=1013: no METADATA_SERIALIZATION_OFFSET(1014), VERSE_CELLS(1015), PACKAGE_SAVED_HASH(1016)
-- 5.6.1 → fileVersionUE5=1017: has all above, no IMPORT_TYPE_HIERARCHIES(1018)
-- 5.7.3 → fileVersionUE5=1018: has all features
+Complete version mapping (from EUnrealEngineObjectUE5Version):
+- 1000 = INITIAL_VERSION (UE 5.0)
+- 1001 = NAMES_REFERENCED_FROM_EXPORT_DATA (UE 5.1)
+- 1002 = PAYLOAD_TOC
+- 1003 = OPTIONAL_RESOURCES
+- 1004 = LARGE_WORLD_COORDINATES
+- 1005 = REMOVE_OBJECT_EXPORT_PACKAGE_GUID
+- 1006 = TRACK_OBJECT_EXPORT_IS_INHERITED
+- 1007 = FSOFTOBJECTPATH_REMOVE_ASSET_PATH_FNAMES (UE 5.2)
+- 1008 = ADD_SOFTOBJECTPATH_LIST
+- 1009 = DATA_RESOURCES (UE 5.3.x)
+- 1010 = SCRIPT_SERIALIZATION_OFFSET (UE 5.4.x)
+- 1011 = PROPERTY_TAG_EXTENSION_AND_OVERRIDABLE_SERIALIZATION
+- 1012 = PROPERTY_TAG_COMPLETE_TYPE_NAME (UE 5.4.x)
+- 1013 = ASSETREGISTRY_PACKAGEBUILDDEPENDENCIES (UE 5.5.x)
+- 1014 = METADATA_SERIALIZATION_OFFSET
+- 1015 = VERSE_CELLS
+- 1016 = PACKAGE_SAVED_HASH (UE 5.6.x)
+- 1017 = OS_SUB_OBJECT_SHADOW_SERIALIZATION
+- 1018 = IMPORT_TYPE_HIERARCHIES (UE 5.7.x)
 
-Key format bug fixed: **Soft Package References** are `TArray<FName>` (2 int32s each = name table index + number), NOT `FSoftObjectPath` (4 int32s + FString). Previously we were reading them as soft object paths which caused out-of-bounds crashes on any asset with soft package references.
+**Test assets and confirmed fileVersionUE5 values:**
+- UE 4.27.2 → fileVersionUE5=0, legacyFileVersion=-7 (test/assets/4_27_2/)
+- UE 5.3.2  → fileVersionUE5=1009 (test/assets/5_3_2/)
+- UE 5.4.4  → fileVersionUE5=1012 (test/assets/5_4_4/)
+- UE 5.5.4  → fileVersionUE5=1013 (test/assets/5_5_4/)
+- UE 5.6.1  → fileVersionUE5=1017 (test/assets/5_6_1/)
+- UE 5.7.3  → fileVersionUE5=1018 (test/assets/5_7_3/)
+
+**UE 5.0, 5.1, 5.2 coverage**: No public monolithic editor assets found online for these
+versions. All version gates for fileVersionUE5 < 1009 are coded but untested.
+Split-format assets (`.uasset` + `.uexp`) from those versions exist in atenfyr/UAssetAPI
+but are out of scope (cooked format).
+
+Key format notes:
+- For fileVersionUE5 < 1010 (UE 5.0–5.3), no script serialization offsets in export map;
+  `parseExport` falls back to parsing tagged properties up to the "None" sentinel, then tail.
+- **Soft Package References** are `TArray<FName>` (2 int32s each), NOT `FSoftObjectPath`.
+- For UE5 static meshes with FRenderingObjectVersion < 49, editor-only deprecated
+  high-res source mesh fields (FString + uint32) are present between NavCollision and LightingGuid.
 
 ## Next steps
 
