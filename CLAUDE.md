@@ -118,7 +118,6 @@ Asset-specific properties (LOD count, material slots, etc.) are populated lazily
 
 ## Next steps
 
-- **Deploy**: Deploy this as a github pages app and setup a simple workflow for updating it
 - **Improve performance**: The app feels very sluggish to use... Maybe instead of so many div elements it should have a single big div with the text of each segment? Not entirely sure
   - Maybe I just need to fully build with bun instead of just run dev?
 - **Minimap / overview**: It's hard to get a good overview of which sections consume the most bytes. It would be nice if between the bytes view and the summary there was some kind of overview/map scrollbar thing that showed a simplified overview of the entire bytes array, segmented and colored with the same colors as the annotations in the bytes view
