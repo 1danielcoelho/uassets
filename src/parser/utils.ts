@@ -7,6 +7,7 @@ import { flagsStr8, EStripDataGlobalFlags } from "./enums.ts";
 import type { FGuid, FEngineVersion, FObjectImport, FObjectExport } from "./types.ts";
 import { parseTaggedProperties } from "./tagged-properties.ts";
 import { CUSTOM_VERSION_GUIDS } from "./custom-version-guids.ts";
+import { UE5_SCRIPT_SERIALIZATION_OFFSET } from "./summary.ts";
 
 export function fGuidToString(g: FGuid): string {
   return [g.a, g.b, g.c, g.d]
@@ -133,24 +134,38 @@ export function parseExport(
   scriptEnd: number,
   parseTailFn: (absEnd: number) => void,
 ): void {
-  const absScriptStart = offset + scriptStart;
-  const absScriptEnd   = offset + scriptEnd;
-  const absEnd         = offset + size;
+  const absEnd = offset + size;
 
-  if (scriptStart > 0) {
+  if (fileVersionUE5 >= UE5_SCRIPT_SERIALIZATION_OFFSET) {
+    // UE5 >= 1010: explicit script serialization offsets are present in the export map.
+    const absScriptStart = offset + scriptStart;
+    const absScriptEnd   = offset + scriptEnd;
+
+    if (scriptStart > 0) {
+      r.seek(offset);
+      r.readBytes(scriptStart, "Export Header");
+    }
+
+    if (absScriptEnd > absScriptStart) {
+      r.seek(absScriptStart);
+      r.group("Properties", () => {
+        parseTaggedProperties(r, names, absScriptEnd, fileVersionUE5);
+      });
+    }
+
+    if (absEnd > absScriptEnd) {
+      r.seek(absScriptEnd);
+      parseTailFn(absEnd);
+    }
+  } else {
+    // UE5 < 1010: no script serialization offsets.
+    // Layout: tagged properties (None-terminated) followed by native tail.
     r.seek(offset);
-    r.readBytes(scriptStart, "Export Header");
-  }
-
-  if (absScriptEnd > absScriptStart) {
-    r.seek(absScriptStart);
     r.group("Properties", () => {
-      parseTaggedProperties(r, names, absScriptEnd, fileVersionUE5);
+      parseTaggedProperties(r, names, absEnd, fileVersionUE5);
     });
-  }
-
-  if (absEnd > absScriptEnd) {
-    r.seek(absScriptEnd);
-    parseTailFn(absEnd);
+    if (r.pos < absEnd) {
+      parseTailFn(absEnd);
+    }
   }
 }

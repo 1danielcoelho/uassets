@@ -28,6 +28,10 @@ const VER_UE4_SPEEDTREE_STATICMESH            = 235;
 // ── Custom version thresholds ─────────────────────────────────────────────────
 // FRenderingObjectVersion::TextureStreamingMeshUVChannelData
 const RV_TextureStreamingMeshUVChannelData = 10;
+// FRenderingObjectVersion::StaticMeshSectionForceOpaqueField
+const RV_StaticMeshSectionForceOpaqueField = 37;
+// FRenderingObjectVersion::DeprecatedHighResSourceMesh
+const RV_DeprecatedHighResSourceMesh = 49;
 // FEditorObjectVersion::RefactorMeshEditorMaterials
 const EV_RefactorMeshEditorMaterials = 8;
 // FFortniteMainBranchObjectVersion::MeshMaterialSlotOverlayMaterialAdded
@@ -106,8 +110,7 @@ function readStaticMeshSection(
   customVersions: ReadonlyMap<string, number>,
 ): void {
   const renderingVer = customVersions.get(GUID_FRenderingObjectVersion) ?? 0;
-  // FRenderingObjectVersion::StaticMeshSectionForceOpaqueField ~= 22
-  const hasForceOpaque = renderingVer >= 22;
+  const hasForceOpaque = renderingVer >= RV_StaticMeshSectionForceOpaqueField;
 
   r.group(`Section[${idx}]`, () => {
     r.readInt32("MaterialIndex");
@@ -414,6 +417,16 @@ function parseStaticMeshTail(
     readPackageIndex(r, "BodySetup");
     if (fileVersionUE4 >= VER_UE4_STATIC_MESH_STORE_NAV_COLLISION) {
       readPackageIndex(r, "NavCollision");
+    }
+
+    // WITH_EDITORONLY_DATA: deprecated high-res source mesh fields
+    // present when FRenderingObjectVersion < DeprecatedHighResSourceMesh (49)
+    const renderingVer = customVersions.get(GUID_FRenderingObjectVersion) ?? 0;
+    if (!isEditorDataStripped(stripFlags) && renderingVer < RV_DeprecatedHighResSourceMesh) {
+      r.group("Deprecated High-Res Source Mesh", () => {
+        r.readFString("HighResSourceMeshName");
+        r.readUint32("HighResSourceMeshCRC");
+      });
     }
 
     readFGuid(r, "LightingGuid");
