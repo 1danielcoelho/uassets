@@ -133,55 +133,8 @@
 
       #hex-col-header span { text-align: center; }
 
-      /* ── Hex rows ── */
-      .hex-row {
-        height: 20px;         /* must match ROW_HEIGHT in hex-view.ts */
-        display: flex;
-        align-items: center;
-        gap: 16px;
-        white-space: nowrap;
-        font-size: 12px;
-      }
-
-      .addr {
-        color: #555;
-        flex-shrink: 0;
-        width: 82px;
-        letter-spacing: 0.03em;
-      }
-
-      .bytes {
-        display: flex;
-        gap: 2px;
-        flex-shrink: 0;
-      }
-
-      /* Individual byte cell */
-      .b {
-        width: 19px;
-        text-align: center;
-        border-radius: 2px;
-        line-height: 20px;
-        letter-spacing: 0;
-        color: #c8c8c8;
-      }
-
-      /* Extra right margin after the 8th byte (mid-row gap) */
-      .b.mid { margin-right: 6px; }
-
-      .ascii {
-        display: flex;
-        flex-shrink: 0;
-        color: #c8c8c8;
-      }
-
-      /* Individual ASCII cell */
-      .c {
-        width: 8px;
-        text-align: center;
-        border-radius: 1px;
-        line-height: 20px;
-      }
+      /* ── Hex canvas ── */
+      #hex-canvas { display: block; }
 
 
       /* ── Right column ── */
@@ -508,12 +461,6 @@
       .annotation-row.annotation-search-active .annotation-size { color: #111; }
 
       /* ── Hover sync ── */
-
-      /* All annotated bytes are slightly dimmed by default */
-      .b[data-byteoffset], .c[data-byteoffset] { filter: brightness(0.72); }
-
-      /* Hovered bytes are brighter than the "natural" color */
-      .b.hovered, .c.hovered { filter: brightness(1.12); }
 
       /* Swatch dots dim by default; full opacity when the row is highlighted */
       .swatch-dot { opacity: 0.65; }
