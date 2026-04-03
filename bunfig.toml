@@ -2,3 +2,6 @@
 entrypoints = ["index.html"]
 outdir = "dist"
 minify = true
+
+[test]
+root = "./test"
