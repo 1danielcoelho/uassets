@@ -206,6 +206,31 @@ export function escHtml(s: string): string {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
+/** Format a ByteRange's full value for copying to clipboard (no truncation for strings/groups). */
+export function fullValueStr(range: ByteRange): string {
+  switch (range.kind) {
+    case "int8":  case "int16":  case "int32":
+    case "uint8": case "uint16": case "uint32":
+    case "float32": case "float64":
+      return range.display ?? range.value.toString();
+    case "int64": case "uint64":
+      return range.display ?? range.value.toString();
+    case "bytes": {
+      const cap = Math.min(range.value.length, 64);
+      const hex = Array.from(range.value.slice(0, cap))
+        .map(b => b.toString(16).padStart(2, "0"))
+        .join(" ");
+      return range.value.length > 64 ? hex + ` … (${range.value.length} bytes)` : hex;
+    }
+    case "string":
+      return range.value;
+    case "guid":
+      return fGuidToString(range.value);
+    case "group":
+      return typeof range.value === "string" ? range.value : "";
+  }
+}
+
 /** Format a ByteRange's value for display in the legend. */
 export function valueStr(range: ByteRange): string {
   switch (range.kind) {

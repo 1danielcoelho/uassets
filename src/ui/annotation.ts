@@ -1,7 +1,7 @@
 import type { ByteRange } from "../types.ts";
 import {
   colorForLabel, buildActiveRanges, removeDescendantsFromExpanded,
-  formatSize, valueStr,
+  formatSize, valueStr, fullValueStr,
   type ColoredRange, type ViewerHandle, type HoverRange,
 } from "./utils.ts";
 
@@ -20,8 +20,9 @@ export interface AnnotationHandle extends ViewerHandle {
   /** Scroll to the deepest ancestor of range that is currently visible (no expansion). */
   scrollToNearestVisible(range: ByteRange): void;
   setSearchResults(matches: ByteRange[], activeRange: ByteRange | null): void;
-  /** Show the expand/collapse context menu at (x, y). The primary item uses the given label and action. */
-  showContextMenuAt(range: ByteRange, x: number, y: number, primaryLabel: string, onPrimary: () => void): void;
+  /** Show the expand/collapse context menu at (x, y). The primary item uses the given label and action.
+   *  Optional extraItems are appended after a divider (e.g. copy-bytes actions from the hex view). */
+  showContextMenuAt(range: ByteRange, x: number, y: number, primaryLabel: string, onPrimary: () => void, extraItems?: Array<{ label: string; action: () => void }>): void;
   onClickRange: ((range: ByteRange) => void) | null;
 }
 
@@ -92,6 +93,10 @@ export function initAnnotation(
   ctxMenu.className = "ctx-menu";
   ctxMenu.innerHTML = `
     <div class="ctx-menu-item" data-action="primary"></div>
+    <div class="ctx-extra-section" style="display:none">
+      <div class="ctx-menu-divider"></div>
+      <div class="ctx-extra-items"></div>
+    </div>
     <div class="ctx-menu-divider"></div>
     <div class="ctx-menu-item" data-action="expand">Expand</div>
     <div class="ctx-menu-item" data-action="expand-recursive">Expand recursively</div>
@@ -104,9 +109,12 @@ export function initAnnotation(
   for (const el of ctxMenu.querySelectorAll<HTMLElement>(".ctx-menu-item")) {
     ctxItems.set(el.dataset["action"]!, el);
   }
+  const ctxExtraSection = ctxMenu.querySelector<HTMLElement>(".ctx-extra-section")!;
+  const ctxExtraItems   = ctxMenu.querySelector<HTMLElement>(".ctx-extra-items")!;
 
   let ctxMenuRange: ByteRange | null = null;
   let ctxOnPrimary: (() => void) | null = null;
+  let ctxExtraActions: Array<() => void> = [];
 
   const handle: AnnotationHandle = {
     onHoverChange: null,
@@ -224,7 +232,7 @@ export function initAnnotation(
       }
     },
 
-    showContextMenuAt(range: ByteRange, x: number, y: number, primaryLabel: string, onPrimary: () => void): void {
+    showContextMenuAt(range: ByteRange, x: number, y: number, primaryLabel: string, onPrimary: () => void, extraItems?: Array<{ label: string; action: () => void }>): void {
       ctxMenuRange = range;
       ctxOnPrimary = onPrimary;
       ctxItems.get("primary")!.textContent = primaryLabel;
@@ -242,9 +250,30 @@ export function initAnnotation(
       setDisabled("collapse",         !isGroup || !isExpanded);
       setDisabled("collapse-parent",  !hasParent);
 
+      // Extra items (e.g. copy-key/copy-value from annotation, or copy-bytes from hex view)
+      ctxExtraActions = [];
+      ctxExtraItems.innerHTML = "";
+      if (extraItems && extraItems.length > 0) {
+        ctxExtraSection.style.display = "";
+        for (const item of extraItems) {
+          const el = document.createElement("div");
+          el.className = "ctx-menu-item";
+          el.textContent = item.label;
+          ctxExtraItems.appendChild(el);
+          ctxExtraActions.push(item.action);
+        }
+      } else {
+        ctxExtraSection.style.display = "none";
+      }
+
+      // Clamp to viewport
       ctxMenu.style.left = `${x}px`;
       ctxMenu.style.top  = `${y}px`;
       ctxMenu.classList.add("visible");
+      // After showing, clamp so the menu doesn't overflow the viewport
+      const rect = ctxMenu.getBoundingClientRect();
+      if (rect.right > window.innerWidth)  ctxMenu.style.left = `${x - rect.width}px`;
+      if (rect.bottom > window.innerHeight) ctxMenu.style.top = `${y - rect.height}px`;
     },
 
     setSearchResults(matches: ByteRange[], activeRange: ByteRange | null): void {
@@ -286,8 +315,21 @@ export function initAnnotation(
       ctxMenu.classList.remove("visible");
       ctxMenuRange = null;
       ctxOnPrimary = null;
+      ctxExtraActions = [];
       return;
     }
+
+    // Extra items (no data-action — matched by position in ctxExtraItems)
+    if (ctxExtraItems.contains(item)) {
+      const idx = Array.from(ctxExtraItems.children).indexOf(item);
+      ctxExtraActions[idx]?.();
+      ctxMenu.classList.remove("visible");
+      ctxMenuRange = null;
+      ctxOnPrimary = null;
+      ctxExtraActions = [];
+      return;
+    }
+
     const r = ctxMenuRange;
     if (r) {
       switch (item.dataset["action"]) {
@@ -330,6 +372,7 @@ export function initAnnotation(
     ctxMenu.classList.remove("visible");
     ctxMenuRange = null;
     ctxOnPrimary = null;
+    ctxExtraActions = [];
   });
 
   window.addEventListener("click", (e) => {
@@ -338,6 +381,7 @@ export function initAnnotation(
       ctxMenu.classList.remove("visible");
       ctxMenuRange = null;
       ctxOnPrimary = null;
+      ctxExtraActions = [];
     }
   }, { signal });
 
@@ -346,6 +390,7 @@ export function initAnnotation(
       ctxMenu.classList.remove("visible");
       ctxMenuRange = null;
       ctxOnPrimary = null;
+      ctxExtraActions = [];
     }
   }, { signal });
 
@@ -356,7 +401,14 @@ export function initAnnotation(
     e.preventDefault();
     const r = trToRange.get(tr);
     if (!r) return;
-    handle.showContextMenuAt(r, e.clientX, e.clientY, "View bytes", () => handle.onClickRange?.(r));
+    const hasValue = r.kind !== "group" || (typeof r.value === "string" && r.value.length > 0);
+    const extraItems: Array<{ label: string; action: () => void }> = [
+      { label: "Copy key",   action: () => navigator.clipboard.writeText(r.label).catch(() => {}) },
+    ];
+    if (hasValue) {
+      extraItems.push({ label: "Copy value", action: () => navigator.clipboard.writeText(fullValueStr(r)).catch(() => {}) });
+    }
+    handle.showContextMenuAt(r, e.clientX, e.clientY, "View bytes", () => handle.onClickRange?.(r), extraItems);
   });
 
   // ── Table hover handlers ──

@@ -340,9 +340,34 @@ async function openFile(file: File): Promise<void> {
 
   // Hex right-click → shared context menu with "View annotation" as primary action.
   hexHandle.onContextMenuRange = (range, x, y) => {
+    const bytes = fileBytes!;
+    const extraItems = [
+      {
+        label: "Copy address",
+        action: () => navigator.clipboard.writeText("0x" + range.start.toString(16).padStart(8, "0")).catch(() => {}),
+      },
+      {
+        label: "Copy bytes (raw)",
+        action: () => {
+          const hex = Array.from(bytes.subarray(range.start, range.end))
+            .map(b => b.toString(16).padStart(2, "0").toUpperCase())
+            .join(" ");
+          navigator.clipboard.writeText(hex).catch(() => {});
+        },
+      },
+      {
+        label: "Copy bytes (ASCII)",
+        action: () => {
+          const ascii = Array.from(bytes.subarray(range.start, range.end))
+            .map(b => b >= 32 && b < 127 ? String.fromCharCode(b) : ".")
+            .join("");
+          navigator.clipboard.writeText(ascii).catch(() => {});
+        },
+      },
+    ];
     annotationHandle!.showContextMenuAt(range, x, y, "View annotation", () => {
       annotationHandle!.scrollToNearestVisible(range);
-    });
+    }, extraItems);
   };
 }
 
