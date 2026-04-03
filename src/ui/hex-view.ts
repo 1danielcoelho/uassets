@@ -37,6 +37,7 @@ const CLR_SEARCH    = "#ffffff";   // search match fill
 const CLR_SEARCH_ACT= "#ffee55";   // active search match fill
 const CLR_HOVER_ADD = "rgba(255,255,255,0.12)";  // overlay on hovered bytes
 const CLR_HOVER_DIM = "rgba(0,0,0,0.28)";        // overlay on non-hovered annotated bytes
+const CLR_SEL_BG    = "rgba(70,130,220,0.55)";   // selection overlay
 
 // ── initHexView ───────────────────────────────────────────────────────────────
 
@@ -140,6 +141,50 @@ export function initHexView(
   // ── Hover state ───────────────────────────────────────────────────────────
   let hoveredRange: HoverRange | null = null;
 
+  // ── Selection state ───────────────────────────────────────────────────────
+  let selAnchor: number | null = null;  // byte offset where drag started
+  let selExtent: number | null = null;  // byte offset at current drag end
+  let isSelecting = false;              // mouse button currently held
+  let didDrag = false;                  // true if pointer moved while held
+
+  function selRange(): { start: number; end: number } | null {
+    if (selAnchor === null || selExtent === null) return null;
+    return { start: Math.min(selAnchor, selExtent), end: Math.max(selAnchor, selExtent) + 1 };
+  }
+
+  function getSelectionText(): string {
+    const sel = selRange();
+    if (!sel) return "";
+
+    const firstRow = Math.floor(sel.start / bytesPerRow);
+    const lastRow  = Math.floor((sel.end - 1) / bytesPerRow);
+    const lines: string[] = [];
+
+    for (let r = firstRow; r <= lastRow; r++) {
+      const rowStart = r * bytesPerRow;
+      const addr = "0x" + rowStart.toString(16).padStart(8, "0");
+
+      const hexCells: string[] = [];
+      const asciiChars: string[] = [];
+      for (let col = 0; col < bytesPerRow; col++) {
+        const offset = rowStart + col;
+        if (offset >= sel.start && offset < sel.end && offset < bytes.length) {
+          const byte = bytes[offset]!;
+          hexCells.push(byte.toString(16).padStart(2, "0").toUpperCase());
+          asciiChars.push(byte >= 32 && byte < 127 ? String.fromCharCode(byte) : ".");
+        } else {
+          hexCells.push("  ");
+          asciiChars.push(" ");
+        }
+      }
+
+      // Mid-gap after first half, matching display layout
+      const hexStr = hexCells.slice(0, half).join(" ") + "  " + hexCells.slice(half).join(" ");
+      lines.push(`${addr}  ${hexStr}  ${asciiChars.join("")}`);
+    }
+    return lines.join("\n");
+  }
+
   // ── Draw frame ────────────────────────────────────────────────────────────
   function drawFrame(): void {
     if (cssW === 0 || cssH === 0) return;
@@ -152,6 +197,7 @@ export function initHexView(
     ctx.clearRect(0, 0, cssW, cssH);
 
     const hasHover = hoveredRange !== null;
+    const sel = selRange();
 
     for (let r = firstRow; r < lastRow; r++) {
       const rowStart = r * bytesPerRow;
@@ -245,9 +291,16 @@ export function initHexView(
         }
 
         // ── Hover overlay ─────────────────────────────────────────────────
-        if (hasHover && cr) {
+        if (hasHover && cr && !sel) {
           const inHover = offset >= hoveredRange!.start && offset < hoveredRange!.end;
           ctx.fillStyle = inHover ? CLR_HOVER_ADD : CLR_HOVER_DIM;
+          ctx.fillRect(bx, y, hexFillW, ROW_HEIGHT);
+          ctx.fillRect(ax, y, ASCII_CELL_W, ROW_HEIGHT);
+        }
+
+        // ── Selection overlay ──────────────────────────────────────────────
+        if (sel && offset >= sel.start && offset < sel.end) {
+          ctx.fillStyle = CLR_SEL_BG;
           ctx.fillRect(bx, y, hexFillW, ROW_HEIGHT);
           ctx.fillRect(ax, y, ASCII_CELL_W, ROW_HEIGHT);
         }
@@ -297,9 +350,37 @@ export function initHexView(
   }
 
   // ── Mouse events ──────────────────────────────────────────────────────────
+  canvas.addEventListener("mousedown", (e) => {
+    if (e.button !== 0) return;
+    const offset = hitTest(e.clientX - canvasRect.left, e.clientY - canvasRect.top);
+    if (offset === null) return;
+    e.preventDefault();  // prevent browser text-selection cursor flicker
+    if (e.shiftKey && selAnchor !== null) {
+      selExtent = offset;
+    } else {
+      selAnchor = offset;
+      selExtent = offset;
+    }
+    isSelecting = true;
+    didDrag = false;
+    requestRedraw();
+  }, { signal });
+
   canvas.addEventListener("mousemove", (e) => {
     const mx = e.clientX - canvasRect.left;
     const my = e.clientY - canvasRect.top;
+
+    if (isSelecting && e.buttons === 1) {
+      const offset = hitTest(mx, my);
+      if (offset !== null && offset !== selExtent) {
+        selExtent = offset;
+        didDrag = true;
+        requestRedraw();
+      }
+      canvas.style.cursor = "crosshair";
+      return;  // skip hover update while selecting
+    }
+
     const offset = hitTest(mx, my);
     const cr     = offset !== null ? colorForByte(offset, colorMap) : null;
     const newRange = cr ? { start: cr.start, end: cr.end } : null;
@@ -312,6 +393,16 @@ export function initHexView(
     handle.onHoverChange?.(hoveredRange);
   }, { signal });
 
+  canvas.addEventListener("mouseup", (e) => {
+    if (e.button !== 0) return;
+    isSelecting = false;
+  }, { signal });
+
+  window.addEventListener("mouseup", (e) => {
+    if (e.button !== 0) return;
+    isSelecting = false;
+  }, { signal });
+
   canvas.addEventListener("mouseleave", () => {
     if (hoveredRange === null) return;
     hoveredRange = null;
@@ -321,6 +412,16 @@ export function initHexView(
   }, { signal });
 
   canvas.addEventListener("click", (e) => {
+    if (didDrag) {
+      didDrag = false;
+      return;  // drag made a selection — don't fire click or clear it
+    }
+    // Plain click: clear any selection
+    if (selAnchor !== null || selExtent !== null) {
+      selAnchor = null;
+      selExtent = null;
+      requestRedraw();
+    }
     const offset = hitTest(e.clientX - canvasRect.left, e.clientY - canvasRect.top);
     if (offset === null) return;
     const cr = colorForByte(offset, colorMap);
@@ -343,6 +444,38 @@ export function initHexView(
     if (!cr) return;
     e.preventDefault();
     handle.onContextMenuRange?.(cr.range, e.clientX, e.clientY);
+  }, { signal });
+
+  document.addEventListener("keydown", (e) => {
+    // Don't intercept keys when an input is focused
+    const tag = (document.activeElement as HTMLElement | null)?.tagName;
+    if (tag === "INPUT" || tag === "TEXTAREA") return;
+
+    if (e.key === "Escape") {
+      if (selAnchor !== null || selExtent !== null) {
+        selAnchor = null;
+        selExtent = null;
+        requestRedraw();
+      }
+      return;
+    }
+
+    if (e.ctrlKey && e.key === "a") {
+      e.preventDefault();
+      selAnchor = 0;
+      selExtent = bytes.length - 1;
+      requestRedraw();
+      return;
+    }
+
+    if (e.ctrlKey && e.key === "c") {
+      const text = getSelectionText();
+      if (text) {
+        e.preventDefault();
+        navigator.clipboard.writeText(text).catch(() => {});
+      }
+      return;
+    }
   }, { signal });
 
   // ── Handle ────────────────────────────────────────────────────────────────

@@ -124,7 +124,6 @@ Asset-specific properties (LOD count, material slots, etc.) are populated lazily
 - **Property Type field has no displayed value**: Some properties like UsdAssetUserData / Properties / PrimPaths / Type have no actual value for the type, even though it consumes 24 bytes? Surely we can display something
 - **Dereferencing the pointer-like types**: Some kinds of values are kind of like "pointers" to other areas in the binary, like how how for static meshes the StaticMaterial just has FNames for MaterialSlotName and ImportedMaterialSlotName. The display for the FName is just "Name Index" and "Name Number". It would be cool if this was also displayed as what the actual name string would have been (e.g. third entry in the name map with a suffix of _0). I think soft object paths are also indices into a list somewhere. Maybe at some other points we get fields that just point at an index on the exports/imports map that we could "resolve" to also display as the text of what that is pointing at, etc. This is mainly a convenience thing
 - **Annotation overflow**: It's very easy for the value (or key) text of an annotation to be too long to fit on the display. It would be nice if we could mouse over it to show the full text in a tooltip of some kind, or display it on the right-click menu somehow, or something like that. I just want to be able to view the full text if possible. There should be some safety checks here too, because this may be a binary blob that is too large to display properly even with this mechanism. Maybe we could add this tooltip AND new options on the right-click menu to `Copy name` and `Copy value`?
-- **Text selection** — With the change to the canvas view we can no longer select the text in the bytes view. It would be useful to be able to select both the raw bytes, the ASCII version and even the address
 - **Menu items**: We should have more items in the top menu bar, like Options -> Show address as hex or decimal, and About page that also links to the github
 
 # Bun
@@ -138,3 +137,5 @@ Default to using Bun instead of Node.js.
 - Use `bun run <script>` instead of `npm run <script>` or `yarn run <script>` or `pnpm run <script>`
 - Use `bunx <package> <command>` instead of `npx <package> <command>`
 - Bun automatically loads .env, so don't use dotenv.
+
+
