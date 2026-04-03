@@ -19,6 +19,17 @@ const menuFile          = document.getElementById("menu-file")!;
 const dropdownFile      = document.getElementById("dropdown-file")!;
 const menuFileOpen      = document.getElementById("menu-file-open")!;
 const submenuExamples   = document.getElementById("submenu-examples")!;
+const menuOptions       = document.getElementById("menu-options")!;
+const dropdownOptions   = document.getElementById("dropdown-options")!;
+const menuOptAddrHex    = document.getElementById("menu-opt-addr-hex")!;
+const menuOptAddrDec    = document.getElementById("menu-opt-addr-dec")!;
+const menuHelp          = document.getElementById("menu-help")!;
+const dropdownHelp      = document.getElementById("dropdown-help")!;
+const menuHelpAbout     = document.getElementById("menu-help-about")!;
+const menuHelpGithub    = document.getElementById("menu-help-github")!;
+const aboutDialog       = document.getElementById("about-dialog")!;
+const aboutOverlay      = document.getElementById("about-overlay")!;
+const aboutClose        = document.getElementById("about-close")!;
 const btnExpandAll      = document.getElementById("btn-expand-all")!;
 const btnCollapseAll    = document.getElementById("btn-collapse-all")!;
 
@@ -48,15 +59,79 @@ document.body.appendChild(fileInput);
 menuFile.addEventListener("click", (e) => {
   e.stopPropagation();
   dropdownFile.classList.toggle("open");
+  dropdownOptions.classList.remove("open");
+  dropdownHelp.classList.remove("open");
+});
+
+menuOptions.addEventListener("click", (e) => {
+  e.stopPropagation();
+  dropdownOptions.classList.toggle("open");
+  dropdownFile.classList.remove("open");
+  dropdownHelp.classList.remove("open");
+});
+
+menuHelp.addEventListener("click", (e) => {
+  e.stopPropagation();
+  dropdownHelp.classList.toggle("open");
+  dropdownFile.classList.remove("open");
+  dropdownOptions.classList.remove("open");
 });
 
 document.addEventListener("click", () => {
   dropdownFile.classList.remove("open");
+  dropdownOptions.classList.remove("open");
+  dropdownHelp.classList.remove("open");
 });
 
 menuFileOpen.addEventListener("click", () => {
   fileInput.value = "";
   fileInput.click();
+});
+
+// ── Options menu wiring ───────────────────────────────────────────────────────
+
+let currentAddressFormat: "hex" | "decimal" = DEFAULT_OPTIONS.addressFormat;
+
+function setAddressFormat(fmt: "hex" | "decimal"): void {
+  currentAddressFormat = fmt;
+  menuOptAddrHex.textContent = (fmt === "hex"      ? "✓ " : "  ") + "Address: Hex";
+  menuOptAddrDec.textContent = (fmt === "decimal"  ? "✓ " : "  ") + "Address: Decimal";
+  hexHandle?.setAddressFormat(fmt);
+}
+
+menuOptAddrHex.addEventListener("click", (e) => {
+  e.stopPropagation();
+  dropdownOptions.classList.remove("open");
+  setAddressFormat("hex");
+});
+
+menuOptAddrDec.addEventListener("click", (e) => {
+  e.stopPropagation();
+  dropdownOptions.classList.remove("open");
+  setAddressFormat("decimal");
+});
+
+// ── Help menu wiring ──────────────────────────────────────────────────────────
+
+function showAbout(): void {
+  dropdownHelp.classList.remove("open");
+  aboutDialog.hidden = false;
+}
+function hideAbout(): void {
+  aboutDialog.hidden = true;
+}
+
+menuHelpAbout.addEventListener("click", (e) => { e.stopPropagation(); showAbout(); });
+aboutOverlay.addEventListener("click", hideAbout);
+aboutClose.addEventListener("click",   hideAbout);
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && !aboutDialog.hidden) hideAbout();
+});
+
+menuHelpGithub.addEventListener("click", (e) => {
+  e.stopPropagation();
+  dropdownHelp.classList.remove("open");
+  window.open("https://github.com/1danielcoelho/uassets", "_blank", "noopener");
 });
 
 fileInput.addEventListener("change", () => {
@@ -307,7 +382,7 @@ async function openFile(file: File): Promise<void> {
     minimapHandle?.updateColorMap(ranges);
   }
 
-  hexHandle        = initHexView(hexPanel, hexColHeader, buffer, result, DEFAULT_OPTIONS);
+  hexHandle        = initHexView(hexPanel, hexColHeader, buffer, result, { ...DEFAULT_OPTIONS, addressFormat: currentAddressFormat });
   minimapHandle    = initMinimap(
     minimapContainer,
     buildActiveRanges(result.ranges, new Set()),

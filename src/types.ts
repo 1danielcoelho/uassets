@@ -76,9 +76,12 @@ export interface Options {
   bytesPerRow: number;
   /** Byte spans longer than this with no children are collapsed into an ellipsis. */
   collapseThreshold: number;
+  /** How to display row addresses. Default: "hex". */
+  addressFormat: "hex" | "decimal";
 }
 
 export const DEFAULT_OPTIONS: Options = {
   bytesPerRow: 16,
   collapseThreshold: 512,
+  addressFormat: "hex",
 };

@@ -503,6 +503,72 @@
       .annotation-row.hovered:not(.annotation-group-row) { background: #2a2a2a; }
       .annotation-group-row.hovered                       { background: #313131; }
 
+      /* ── About dialog ── */
+      #about-overlay {
+        position: fixed;
+        inset: 0;
+        background: rgba(0,0,0,0.6);
+        z-index: 900;
+      }
+      #about-box {
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        z-index: 901;
+        background: #2d2d2d;
+        border: 1px solid #555;
+        border-radius: 8px;
+        padding: 24px 28px;
+        min-width: 360px;
+        max-width: 480px;
+        box-shadow: 0 8px 32px rgba(0,0,0,0.6);
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+      }
+      #about-title {
+        font-size: 18px;
+        font-weight: bold;
+        color: #9cdcfe;
+      }
+      #about-body {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        color: #b5b5b5;
+        font-size: 12px;
+        line-height: 1.6;
+      }
+      #about-body code {
+        background: #1a1a1a;
+        padding: 1px 5px;
+        border-radius: 3px;
+        font-family: inherit;
+      }
+      #about-links {
+        display: flex;
+        gap: 12px;
+      }
+      #about-links a {
+        color: #4a9eff;
+        text-decoration: none;
+        font-size: 12px;
+      }
+      #about-links a:hover { text-decoration: underline; }
+      #about-close {
+        align-self: flex-end;
+        background: #3a3a3a;
+        border: 1px solid #555;
+        color: #ccc;
+        padding: 4px 16px;
+        border-radius: 4px;
+        cursor: pointer;
+        font-family: inherit;
+        font-size: 12px;
+      }
+      #about-close:hover { background: #4a4a4a; }
+
       /* ── Right-click context menu ── */
       .ctx-menu {
         position: fixed;
@@ -543,6 +609,37 @@
             <div class="submenu" id="submenu-examples"></div>
           </div>
         </div>
+      </div>
+      <div class="menu-item" id="menu-options">
+        Options ▾
+        <div class="dropdown" id="dropdown-options">
+          <div class="dropdown-item" id="menu-opt-addr-hex">✓ Address: Hex</div>
+          <div class="dropdown-item" id="menu-opt-addr-dec">  Address: Decimal</div>
+        </div>
+      </div>
+      <div class="menu-item" id="menu-help">
+        Help ▾
+        <div class="dropdown" id="dropdown-help">
+          <div class="dropdown-item" id="menu-help-about">About…</div>
+          <div class="dropdown-item" id="menu-help-github">GitHub ↗</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- About dialog -->
+    <div id="about-dialog" hidden>
+      <div id="about-overlay"></div>
+      <div id="about-box">
+        <div id="about-title">UAsset Viewer</div>
+        <div id="about-body">
+          <p>A fully client-side browser tool for inspecting Unreal Engine <code>.uasset</code> and <code>.umap</code> files.</p>
+          <p>Files are parsed entirely in your browser — nothing is uploaded to any server.</p>
+          <p>Supports Unreal Engine 5.x asset format.</p>
+        </div>
+        <div id="about-links">
+          <a href="https://github.com/nicksyostudy/uasset-viewer" target="_blank" rel="noopener">View on GitHub</a>
+        </div>
+        <button id="about-close">Close</button>
       </div>
     </div>
     <div id="content">

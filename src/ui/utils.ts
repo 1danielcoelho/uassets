@@ -189,6 +189,7 @@ export interface HexViewHandle extends ViewerHandle {
     addrOffsets: number[],
     activeAddrOffset: number,
   ): void;
+  setAddressFormat(format: "hex" | "decimal"): void;
 }
 
 // ── Formatters ────────────────────────────────────────────────────────────────

@@ -123,7 +123,6 @@ Asset-specific properties (LOD count, material slots, etc.) are populated lazily
 - **Remove the automated tests that are inside the UE source**: Those are run when we do `bun test` and are always failing, causing Claude to lose a couple cycles
 - **Property Type field has no displayed value**: Some properties like UsdAssetUserData / Properties / PrimPaths / Type have no actual value for the type, even though it consumes 24 bytes? Surely we can display something
 - **Dereferencing the pointer-like types**: Some kinds of values are kind of like "pointers" to other areas in the binary, like how how for static meshes the StaticMaterial just has FNames for MaterialSlotName and ImportedMaterialSlotName. The display for the FName is just "Name Index" and "Name Number". It would be cool if this was also displayed as what the actual name string would have been (e.g. third entry in the name map with a suffix of _0). I think soft object paths are also indices into a list somewhere. Maybe at some other points we get fields that just point at an index on the exports/imports map that we could "resolve" to also display as the text of what that is pointing at, etc. This is mainly a convenience thing
-- **Menu items**: We should have more items in the top menu bar, like Options -> Show address as hex or decimal, and About page that also links to the github
 
 # Bun
 

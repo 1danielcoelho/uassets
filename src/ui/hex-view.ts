@@ -61,6 +61,12 @@ export function initHexView(
   const totalHeight = totalRows * ROW_HEIGHT;
 
   let colorMap: ColoredRange[] = buildActiveRanges(parsedAsset.ranges, new Set<ByteRange>());
+  let addressFormat: "hex" | "decimal" = options.addressFormat;
+
+  function formatAddr(offset: number): string {
+    if (addressFormat === "decimal") return offset.toString(10).padStart(10, " ");
+    return "0x" + offset.toString(16).padStart(8, "0");
+  }
 
   // ── Search state ──────────────────────────────────────────────────────────
   let smGroups:          ReadonlyArray<{ readonly offsets: ReadonlyArray<number>; readonly len: number }> = [];
@@ -162,7 +168,7 @@ export function initHexView(
 
     for (let r = firstRow; r <= lastRow; r++) {
       const rowStart = r * bytesPerRow;
-      const addr = "0x" + rowStart.toString(16).padStart(8, "0");
+      const addr = formatAddr(rowStart);
 
       const hexCells: string[] = [];
       const asciiChars: string[] = [];
@@ -221,7 +227,7 @@ export function initHexView(
       let cr: ColoredRange | null = null;
 
       // ── Address column ─────────────────────────────────────────────────
-      const addr = "0x" + rowStart.toString(16).padStart(8, "0");
+      const addr = formatAddr(rowStart);
       if (rowStart === smActiveAddrOffset) {
         ctx.fillStyle = CLR_ADDR_ACT;
         ctx.fillRect(0, y, ADDR_COL_W, ROW_HEIGHT);
@@ -514,6 +520,11 @@ export function initHexView(
       const rowTop      = Math.floor(offset / bytesPerRow) * ROW_HEIGHT;
       const centeredTop = rowTop - Math.floor((container.clientHeight - ROW_HEIGHT) / 2);
       container.scrollTo({ top: Math.max(0, centeredTop), behavior: "smooth" });
+    },
+
+    setAddressFormat(format: "hex" | "decimal"): void {
+      addressFormat = format;
+      requestRedraw();
     },
   };
 
