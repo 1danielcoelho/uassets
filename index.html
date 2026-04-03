@@ -137,6 +137,30 @@
       #hex-canvas { display: block; }
 
 
+      /* ── Minimap column ── */
+      #minimap-column {
+        display: none;
+        flex-direction: column;
+        flex: none;
+        width: 24px;
+        background: #1a1a1a;
+        border-left: 1px solid #3e3e3e;
+        overflow: hidden;
+      }
+      #minimap-column.visible { display: flex; }
+
+      #minimap-col-header {
+        height: 28px;
+        flex-shrink: 0;
+        background: #1a1a1a;
+        border-bottom: 1px solid #272727;
+      }
+
+      #minimap-container {
+        flex: 1;
+        overflow: hidden;
+      }
+
       /* ── Right column ── */
       #right-panel {
         flex: 1;
@@ -519,6 +543,10 @@
       <div id="hex-column">
         <div id="hex-col-header"></div>
         <div id="hex-panel"></div>
+      </div>
+      <div id="minimap-column">
+        <div id="minimap-col-header"></div>
+        <div id="minimap-container"></div>
       </div>
       <div id="right-panel">
         <div id="summary-panel"><span class="placeholder">No file loaded</span></div>

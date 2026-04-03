@@ -1,15 +1,18 @@
 import type { ParseResult, ByteRange } from "../types.ts";
 import { DEFAULT_OPTIONS } from "../types.ts";
 import { parseUAsset } from "../parser/parser.ts";
-import { initHexView, hexColumnWidth } from "./hex-view.ts";
+import { initHexView, hexColumnWidth, ROW_HEIGHT } from "./hex-view.ts";
 import { initAnnotation, type AnnotationHandle } from "./annotation.ts";
-import { formatSize, escHtml, findMatches, findAnnotationMatches, findAddressMatches, type HexViewHandle } from "./utils.ts";
+import { formatSize, escHtml, findMatches, findAnnotationMatches, findAddressMatches, buildActiveRanges, type HexViewHandle, type ColoredRange } from "./utils.ts";
+import { initMinimap, type MinimapHandle } from "./minimap.ts";
 
 // ── Elements ──────────────────────────────────────────────────────────────────
 
 const hexPanel          = document.getElementById("hex-panel")!;
 const hexColHeader      = document.getElementById("hex-col-header")!;
 const hexColumn         = document.getElementById("hex-column")!;
+const minimapColumn     = document.getElementById("minimap-column")!;
+const minimapContainer  = document.getElementById("minimap-container")!;
 const summaryPanel      = document.getElementById("summary-panel")!;
 const annotationPanel   = document.getElementById("annotation-panel")!;
 const menuFile          = document.getElementById("menu-file")!;
@@ -81,7 +84,9 @@ type SearchMatchItem =
 let fileBytes:              Uint8Array | null        = null;
 let hexHandle:              HexViewHandle | null     = null;
 let annotationHandle:       AnnotationHandle | null  = null;
+let minimapHandle:          MinimapHandle | null     = null;
 let allRanges:              ByteRange[]              = [];
+let currentFileAbort:       AbortController | null  = null;
 
 let allMatches:             SearchMatchItem[] = [];
 let searchActive            = -1;
@@ -264,6 +269,10 @@ btnCollapseAll.addEventListener("click", () => annotationHandle?.collapseAll());
 // ── Open & parse ──────────────────────────────────────────────────────────────
 
 async function openFile(file: File): Promise<void> {
+  currentFileAbort?.abort();
+  currentFileAbort = new AbortController();
+  const { signal } = currentFileAbort;
+
   const buffer = await file.arrayBuffer();
   let result: ParseResult;
   try {
@@ -288,8 +297,32 @@ async function openFile(file: File): Promise<void> {
   renderSummary(result, file);
   hexColHeader.classList.remove("hidden");
   hexColumn.style.width = `${hexColumnWidth(DEFAULT_OPTIONS.bytesPerRow)}px`;
+
+  const totalScrollHeight = Math.ceil(result.totalBytes / DEFAULT_OPTIONS.bytesPerRow) * ROW_HEIGHT;
+
+  // Color map change callback notifies both hex view and minimap.
+  function onColorMapChange(ranges: ColoredRange[]): void {
+    hexHandle!.updateColorMap(ranges);
+    minimapHandle?.updateColorMap(ranges);
+  }
+
   hexHandle        = initHexView(hexPanel, hexColHeader, buffer, result, DEFAULT_OPTIONS);
-  annotationHandle = initAnnotation(annotationPanel, result.ranges, hexHandle.updateColorMap);
+  minimapHandle    = initMinimap(
+    minimapContainer,
+    buildActiveRanges(result.ranges, new Set()),
+    result.totalBytes,
+    (scrollTop) => { hexPanel.scrollTo({ top: scrollTop, behavior: "smooth" }); },
+  );
+  annotationHandle = initAnnotation(annotationPanel, result.ranges, onColorMapChange);
+
+  // Show minimap now that a file is loaded.
+  minimapColumn.classList.add("visible");
+
+  // Keep minimap viewport indicator in sync with hex panel scrolling.
+  hexPanel.addEventListener("scroll", () => {
+    minimapHandle?.updateViewport(hexPanel.scrollTop, hexPanel.clientHeight, totalScrollHeight);
+  }, { signal });
+  minimapHandle.updateViewport(hexPanel.scrollTop, hexPanel.clientHeight, totalScrollHeight);
 
   // Cross-wire hover sync.
   hexHandle.onHoverChange        = annotationHandle.setHovered.bind(annotationHandle);
