@@ -88,6 +88,11 @@
         overflow: hidden;
       }
 
+      /* ── No-file (welcome) state ── */
+      body.no-file #right-panel { display: none; }
+      body.no-file #hex-column  { flex: 1; width: auto !important; }
+      body.no-file #hex-panel   { display: flex; align-items: center; justify-content: center; }
+
       /* ── Hex panel (left) ── */
       #hex-panel {
         flex: 1;
@@ -254,6 +259,7 @@
         align-items: flex-start;
         padding: 24px;
         gap: 12px;
+        max-width: 560px;
       }
       .example-btns {
         display: flex;

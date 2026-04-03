@@ -294,6 +294,7 @@ async function openFile(file: File): Promise<void> {
   clearSearchState();
   searchInput.value = "";
 
+  document.body.classList.remove("no-file");
   renderSummary(result, file);
   hexColHeader.classList.remove("hidden");
   hexColumn.style.width = `${hexColumnWidth(DEFAULT_OPTIONS.bytesPerRow)}px`;
@@ -425,6 +426,7 @@ for (const { file, label } of EXAMPLE_ASSETS) {
 }
 
 function showWelcome(): void {
+  document.body.classList.add("no-file");
   hexColHeader.classList.add("hidden");
   const btns = EXAMPLE_ASSETS.map(({ file, label }) =>
     `<button class="example-btn" data-asset="${escHtml(file)}">${escHtml(label)}</button>`
