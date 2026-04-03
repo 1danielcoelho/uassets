@@ -21,7 +21,8 @@ const HEX_PANEL_H_PAD = 24;
 
 /** Total CSS-px width the #hex-column should be set to. */
 export function hexColumnWidth(bytesPerRow: number): number {
-  const bytesColWidth = bytesPerRow * BYTE_CELL_W + (bytesPerRow - 1) * BYTE_GAP_W + MID_GAP_W;
+  const numGroupGaps  = bytesPerRow / 8 - 1;
+  const bytesColWidth = bytesPerRow * BYTE_CELL_W + (bytesPerRow - 1) * BYTE_GAP_W + numGroupGaps * MID_GAP_W;
   const asciiColWidth = bytesPerRow * ASCII_CELL_W;
   return ADDR_COL_W + HEX_ROW_GAP + bytesColWidth + HEX_ROW_GAP + asciiColWidth + HEX_PANEL_H_PAD;
 }
@@ -56,7 +57,6 @@ export function initHexView(
 
   const bytes       = new Uint8Array(fileBytes);
   const bytesPerRow = options.bytesPerRow;
-  const half        = bytesPerRow >>> 1;
   const totalRows   = Math.ceil(parsedAsset.totalBytes / bytesPerRow);
   const totalHeight = totalRows * ROW_HEIGHT;
 
@@ -76,14 +76,15 @@ export function initHexView(
   let smActiveAddrOffset             = -1;
 
   // ── Column layout (CSS px) ────────────────────────────────────────────────
-  const bytesColWidth = bytesPerRow * BYTE_CELL_W + (bytesPerRow - 1) * BYTE_GAP_W + MID_GAP_W;
+  const numGroupGaps  = bytesPerRow / 8 - 1;
+  const bytesColWidth = bytesPerRow * BYTE_CELL_W + (bytesPerRow - 1) * BYTE_GAP_W + numGroupGaps * MID_GAP_W;
   const asciiColWidth = bytesPerRow * ASCII_CELL_W;
   const hexColX       = ADDR_COL_W + HEX_ROW_GAP;
   const asciiColX     = hexColX + bytesColWidth + HEX_ROW_GAP;
 
   /** CSS-px x position of the left edge of byte cell `col` within the hex column. */
   function byteX(col: number): number {
-    return hexColX + col * (BYTE_CELL_W + BYTE_GAP_W) + (col >= half ? MID_GAP_W : 0);
+    return hexColX + col * (BYTE_CELL_W + BYTE_GAP_W) + Math.floor(col / 8) * MID_GAP_W;
   }
 
   // ── Column header ─────────────────────────────────────────────────────────
@@ -184,8 +185,10 @@ export function initHexView(
         }
       }
 
-      // Mid-gap after first half, matching display layout
-      const hexStr = hexCells.slice(0, half).join(" ") + "  " + hexCells.slice(half).join(" ");
+      // Double-space between each 8-byte group, matching display layout
+      const groups: string[] = [];
+      for (let g = 0; g < bytesPerRow / 8; g++) groups.push(hexCells.slice(g * 8, g * 8 + 8).join(" "));
+      const hexStr = groups.join("  ");
       lines.push(`${addr}  ${hexStr}  ${asciiChars.join("")}`);
     }
     return lines.join("\n");

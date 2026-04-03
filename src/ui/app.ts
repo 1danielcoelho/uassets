@@ -23,6 +23,10 @@ const menuOptions       = document.getElementById("menu-options")!;
 const dropdownOptions   = document.getElementById("dropdown-options")!;
 const menuOptAddrHex    = document.getElementById("menu-opt-addr-hex")!;
 const menuOptAddrDec    = document.getElementById("menu-opt-addr-dec")!;
+const menuOptCols16     = document.getElementById("menu-opt-cols-16")!;
+const menuOptCols32     = document.getElementById("menu-opt-cols-32")!;
+const menuOptCols64     = document.getElementById("menu-opt-cols-64")!;
+const menuOptCols128    = document.getElementById("menu-opt-cols-128")!;
 const menuHelp          = document.getElementById("menu-help")!;
 const dropdownHelp      = document.getElementById("dropdown-help")!;
 const menuHelpAbout     = document.getElementById("menu-help-about")!;
@@ -111,6 +115,75 @@ menuOptAddrDec.addEventListener("click", (e) => {
   setAddressFormat("decimal");
 });
 
+let currentBytesPerRow: number = DEFAULT_OPTIONS.bytesPerRow;
+const colMenuItems: [number, HTMLElement][] = [
+  [16,  menuOptCols16],
+  [32,  menuOptCols32],
+  [64,  menuOptCols64],
+  [128, menuOptCols128],
+];
+
+function setBytesPerRow(cols: number): void {
+  currentBytesPerRow = cols;
+  for (const [n, el] of colMenuItems) {
+    el.textContent = (n === cols ? "✓ " : "  ") + `${n} bytes/row`;
+  }
+  refreshHexView();
+}
+
+for (const [n, el] of colMenuItems) {
+  el.addEventListener("click", (e) => {
+    e.stopPropagation();
+    dropdownOptions.classList.remove("open");
+    setBytesPerRow(n);
+  });
+}
+
+function refreshHexView(): void {
+  if (!lastBuffer || !lastResult) return;
+  hexColumn.style.width = `${hexColumnWidth(currentBytesPerRow)}px`;
+  totalScrollHeight = Math.ceil(lastResult.totalBytes / currentBytesPerRow) * ROW_HEIGHT;
+  const opts = { ...DEFAULT_OPTIONS, bytesPerRow: currentBytesPerRow, addressFormat: currentAddressFormat };
+  hexHandle = initHexView(hexPanel, hexColHeader, lastBuffer, lastResult, opts);
+  hexHandle.onHoverChange = (range) => annotationHandle?.setHovered(range);
+  hexHandle.onClickRange = (range) => {
+    annotationHandle!.expandRange(range);
+    annotationHandle!.expandAndScrollToRange(range);
+  };
+  hexHandle.onContextMenuRange = (range, x, y) => {
+    const bytes = fileBytes!;
+    const extraItems = [
+      {
+        label: "Copy address",
+        action: () => navigator.clipboard.writeText("0x" + range.start.toString(16).padStart(8, "0")).catch(() => {}),
+      },
+      {
+        label: "Copy bytes (raw)",
+        action: () => {
+          const hex = Array.from(bytes.subarray(range.start, range.end))
+            .map(b => b.toString(16).padStart(2, "0").toUpperCase())
+            .join(" ");
+          navigator.clipboard.writeText(hex).catch(() => {});
+        },
+      },
+      {
+        label: "Copy bytes (ASCII)",
+        action: () => {
+          const ascii = Array.from(bytes.subarray(range.start, range.end))
+            .map(b => b >= 32 && b < 127 ? String.fromCharCode(b) : ".")
+            .join("");
+          navigator.clipboard.writeText(ascii).catch(() => {});
+        },
+      },
+    ];
+    annotationHandle!.showContextMenuAt(range, x, y, "View annotation", () => {
+      annotationHandle!.scrollToNearestVisible(range);
+    }, extraItems);
+  };
+  applySearchState();
+  minimapHandle?.updateViewport(hexPanel.scrollTop, hexPanel.clientHeight, totalScrollHeight);
+}
+
 // ── Help menu wiring ──────────────────────────────────────────────────────────
 
 function showAbout(): void {
@@ -162,6 +235,9 @@ let annotationHandle:       AnnotationHandle | null  = null;
 let minimapHandle:          MinimapHandle | null     = null;
 let allRanges:              ByteRange[]              = [];
 let currentFileAbort:       AbortController | null  = null;
+let lastBuffer:             ArrayBuffer | null       = null;
+let lastResult:             ParseResult | null       = null;
+let totalScrollHeight:      number                   = 0;
 
 let allMatches:             SearchMatchItem[] = [];
 let searchActive            = -1;
@@ -188,7 +264,7 @@ function runSearch(): void {
   // Address search
   addressOffsets = [];
   if (chkAddr.checked && fileBytes && query) {
-    addressOffsets = findAddressMatches(fileBytes.length, DEFAULT_OPTIONS.bytesPerRow, query);
+    addressOffsets = findAddressMatches(fileBytes.length, currentBytesPerRow, query);
   }
 
   // Annotation search
@@ -365,6 +441,8 @@ async function openFile(file: File): Promise<void> {
   // Reset search state for the new file.
   fileBytes  = new Uint8Array(buffer);
   allRanges  = result.ranges;
+  lastBuffer = buffer;
+  lastResult = result;
   hideSearch();
   clearSearchState();
   searchInput.value = "";
@@ -372,9 +450,6 @@ async function openFile(file: File): Promise<void> {
   document.body.classList.remove("no-file");
   renderSummary(result, file);
   hexColHeader.classList.remove("hidden");
-  hexColumn.style.width = `${hexColumnWidth(DEFAULT_OPTIONS.bytesPerRow)}px`;
-
-  const totalScrollHeight = Math.ceil(result.totalBytes / DEFAULT_OPTIONS.bytesPerRow) * ROW_HEIGHT;
 
   // Color map change callback notifies both hex view and minimap.
   function onColorMapChange(ranges: ColoredRange[]): void {
@@ -382,7 +457,6 @@ async function openFile(file: File): Promise<void> {
     minimapHandle?.updateColorMap(ranges);
   }
 
-  hexHandle        = initHexView(hexPanel, hexColHeader, buffer, result, { ...DEFAULT_OPTIONS, addressFormat: currentAddressFormat });
   minimapHandle    = initMinimap(
     minimapContainer,
     buildActiveRanges(result.ranges, new Set()),
@@ -391,6 +465,11 @@ async function openFile(file: File): Promise<void> {
   );
   annotationHandle = initAnnotation(annotationPanel, result.ranges, onColorMapChange);
 
+  // Wire annotation callbacks through module-level hexHandle so they always
+  // point at the current hex view (even after a bytesPerRow change).
+  annotationHandle.onHoverChange = (range) => hexHandle?.setHovered(range);
+  annotationHandle.onClickRange  = (range) => hexHandle?.scrollToOffset(range.start);
+
   // Show minimap now that a file is loaded.
   minimapColumn.classList.add("visible");
 
@@ -398,52 +477,10 @@ async function openFile(file: File): Promise<void> {
   hexPanel.addEventListener("scroll", () => {
     minimapHandle?.updateViewport(hexPanel.scrollTop, hexPanel.clientHeight, totalScrollHeight);
   }, { signal });
+
+  // Initialize hex view (sets hexHandle, totalScrollHeight, hexColumn width).
+  refreshHexView();
   minimapHandle.updateViewport(hexPanel.scrollTop, hexPanel.clientHeight, totalScrollHeight);
-
-  // Cross-wire hover sync.
-  hexHandle.onHoverChange        = annotationHandle.setHovered.bind(annotationHandle);
-  annotationHandle.onHoverChange = hexHandle.setHovered.bind(hexHandle);
-
-  // Hex single click → expand the clicked range (if a group) + expand ancestors + scroll to it.
-  hexHandle.onClickRange = (range) => {
-    annotationHandle!.expandRange(range);
-    annotationHandle!.expandAndScrollToRange(range);
-  };
-
-  // Annotation right-click → context menu → "View bytes" fires onClickRange.
-  annotationHandle.onClickRange = (range) => hexHandle!.scrollToOffset(range.start);
-
-  // Hex right-click → shared context menu with "View annotation" as primary action.
-  hexHandle.onContextMenuRange = (range, x, y) => {
-    const bytes = fileBytes!;
-    const extraItems = [
-      {
-        label: "Copy address",
-        action: () => navigator.clipboard.writeText("0x" + range.start.toString(16).padStart(8, "0")).catch(() => {}),
-      },
-      {
-        label: "Copy bytes (raw)",
-        action: () => {
-          const hex = Array.from(bytes.subarray(range.start, range.end))
-            .map(b => b.toString(16).padStart(2, "0").toUpperCase())
-            .join(" ");
-          navigator.clipboard.writeText(hex).catch(() => {});
-        },
-      },
-      {
-        label: "Copy bytes (ASCII)",
-        action: () => {
-          const ascii = Array.from(bytes.subarray(range.start, range.end))
-            .map(b => b >= 32 && b < 127 ? String.fromCharCode(b) : ".")
-            .join("");
-          navigator.clipboard.writeText(ascii).catch(() => {});
-        },
-      },
-    ];
-    annotationHandle!.showContextMenuAt(range, x, y, "View annotation", () => {
-      annotationHandle!.scrollToNearestVisible(range);
-    }, extraItems);
-  };
 }
 
 // ── Summary panel ─────────────────────────────────────────────────────────────
