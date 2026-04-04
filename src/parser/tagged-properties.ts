@@ -34,7 +34,7 @@
  */
 
 import { BinaryReader } from "./reader.ts";
-import { flagsStr8, enumStr, EPropertyTagFlags, EPropertyTagExtension, EClassSerializationControlExtension } from "./enums.ts";
+import { flagsStr8, EPropertyTagFlags, EPropertyTagExtension, EClassSerializationControlExtension } from "./enums.ts";
 
 // EPropertyTagFlags
 const FLAG_HAS_ARRAY_INDEX            = 0x01;
@@ -54,29 +54,284 @@ const CTRL_EXT_OVERRIDABLE_SERIALIZATION = 0x02;
 const UE5_PROPERTY_TAG_EXTENSION_AND_OVERRIDABLE_SERIALIZATION = 1011;
 const UE5_PROPERTY_TAG_COMPLETE_TYPE_NAME                      = 1012;
 
+// ── FPropertyTypeName ──────────────────────────────────────────────────────────
+
+/** Parsed FPropertyTypeName node. */
+interface PropType {
+  name: string;
+  params: PropType[];
+}
+
+/** Convert a PropType tree to its display string. */
+function propTypeStr(t: PropType): string {
+  return t.params.length === 0
+    ? t.name
+    : `${t.name}<${t.params.map(propTypeStr).join(", ")}>`;
+}
+
 /**
- * Read nodes of an FPropertyTypeName from the binary archive (unlabeled).
+ * Read one node of an FPropertyTypeName from the binary archive (unlabeled).
  *
  * Each node: FName (2 × int32) + int32 InnerCount = 12 bytes.
- * The loop starts with Remaining = 1 and runs until Remaining reaches 0.
- * Returns the root (first node) type name string.
+ * InnerCount is the number of direct child nodes, read recursively.
  */
-function readTypeName(r: BinaryReader, names: string[]): string {
-  let remaining = 1;
-  let first = true;
-  let rootName = "Unknown";
-  while (remaining > 0) {
-    const ni = r.readInt32();
-    r.readInt32(); // instance number
-    const ic = r.readInt32(); // InnerCount
-    if (first) {
-      rootName = names[ni] ?? `<name#${ni}>`;
-      first = false;
-    }
-    remaining += ic - 1;
-  }
-  return rootName;
+function readTypeNameNode(r: BinaryReader, names: string[]): PropType {
+  const ni = r.readInt32();
+  r.readInt32(); // instance number
+  const ic = r.readInt32(); // InnerCount (number of direct children)
+  const name = names[ni] ?? `<name#${ni}>`;
+  const params: PropType[] = [];
+  for (let i = 0; i < ic; i++) params.push(readTypeNameNode(r, names));
+  return { name, params };
 }
+
+// ── Native struct readers ──────────────────────────────────────────────────────
+
+/** Annotated readers for known native-binary structs (HasBinaryOrNativeSerialize). */
+const NATIVE_STRUCT_READERS: Record<string, (r: BinaryReader) => void> = {
+  Guid:          r => { r.readFGuid("Value"); },
+  LinearColor:   r => { r.readFloat32("R"); r.readFloat32("G"); r.readFloat32("B"); r.readFloat32("A"); },
+  Color:         r => { r.readUint8("B"); r.readUint8("G"); r.readUint8("R"); r.readUint8("A"); },
+  Vector:        r => { r.readFloat64("X"); r.readFloat64("Y"); r.readFloat64("Z"); },
+  Vector2D:      r => { r.readFloat64("X"); r.readFloat64("Y"); },
+  Vector4:       r => { r.readFloat64("X"); r.readFloat64("Y"); r.readFloat64("Z"); r.readFloat64("W"); },
+  Quat:          r => { r.readFloat64("X"); r.readFloat64("Y"); r.readFloat64("Z"); r.readFloat64("W"); },
+  Rotator:       r => { r.readFloat64("Pitch"); r.readFloat64("Yaw"); r.readFloat64("Roll"); },
+  IntPoint:      r => { r.readInt32("X"); r.readInt32("Y"); },
+  IntVector:     r => { r.readInt32("X"); r.readInt32("Y"); r.readInt32("Z"); },
+  Box2D:         r => { r.readFloat64("Min.X"); r.readFloat64("Min.Y"); r.readFloat64("Max.X"); r.readFloat64("Max.Y"); r.readUint8("IsValid"); },
+  Box:           r => { r.readFloat64("Min.X"); r.readFloat64("Min.Y"); r.readFloat64("Min.Z"); r.readFloat64("Max.X"); r.readFloat64("Max.Y"); r.readFloat64("Max.Z"); r.readUint8("IsValid"); },
+};
+
+// ── Helpers ────────────────────────────────────────────────────────────────────
+
+/**
+ * Read an FName (2 × int32) and emit a group annotation whose value is the
+ * resolved name string (e.g. "StaticMesh" or "MySlot_0").
+ */
+function readFNameGroup(r: BinaryReader, names: string[], label: string): string {
+  return r.group(label, () => {
+    const ni  = r.readInt32("Name Index");
+    const num = r.readInt32("Name Number");
+    const base = names[ni] ?? `<name#${ni}>`;
+    return num > 0 ? `${base}_${num - 1}` : base;
+  }) as string;
+}
+
+/** Read an FText value, emitting a group annotation with label. */
+function readTextAnnotation(r: BinaryReader, label: string, valueEnd: number): void {
+  r.group(label, () => {
+    r.readInt32("Flags");
+    const historyRaw = r.readUint8("History Type");
+    const historyType = historyRaw > 127 ? historyRaw - 256 : historyRaw; // signed int8
+    switch (historyType) {
+      case -1: { // None
+        const hasCulture = r.readUint8("Has Culture Invariant String");
+        if (hasCulture) r.readFString("Culture Invariant String");
+        break;
+      }
+      case 0: // Base
+        r.readFString("Namespace");
+        r.readFString("Key");
+        r.readFString("Source String");
+        break;
+      case 11: // StringTableEntry
+        r.readFString("Table Id");
+        r.readFString("Key");
+        break;
+      default:
+        // Unrecognised history type; remaining bytes handled by outer safety fallback.
+        break;
+    }
+    // Safety: consume any bytes not parsed by the switch above.
+    if (r.pos < valueEnd) r.readBytes(valueEnd - r.pos, "Remaining Text Data");
+  });
+}
+
+// ── Property value dispatch ────────────────────────────────────────────────────
+
+/**
+ * Read and annotate the value bytes for a single property.
+ *
+ * On return r.pos should equal valueEnd; if it falls short the caller adds a
+ * "Remaining Value" annotation for the unconsumed tail.
+ *
+ * @param r            Reader positioned at the start of the value bytes.
+ * @param names        Package name table.
+ * @param propType     Parsed property type (root node of FPropertyTypeName).
+ * @param hasNative    True when HasBinaryOrNativeSerialize (0x08) is set on the tag.
+ * @param valueEnd     Exclusive end offset for this value.
+ * @param fileVersionUE5  UE5 custom version (needed for recursive struct parsing).
+ * @param label        Annotation label.
+ */
+function readPropertyValue(
+  r: BinaryReader,
+  names: string[],
+  propType: PropType,
+  hasNative: boolean,
+  valueEnd: number,
+  fileVersionUE5: number,
+  label: string,
+): void {
+  if (r.pos >= valueEnd) return;
+
+  switch (propType.name) {
+    // ── Boolean ─────────────────────────────────────────────────────────────
+    case "BoolProperty":
+      // Value is encoded in the tag flags (BoolTrue = 0x10); size == 0.
+      break;
+
+    // ── Integer scalars ──────────────────────────────────────────────────────
+    case "Int8Property":
+      r.readUint8(label); break; // serialized as uint8, 1 byte
+
+    case "ByteProperty":
+    case "EnumProperty": {
+      const sz = valueEnd - r.pos;
+      if (sz === 1) {
+        r.readUint8(label);
+      } else {
+        // Enum value stored as FName (8 bytes)
+        readFNameGroup(r, names, label);
+      }
+      break;
+    }
+
+    case "Int16Property":  r.readInt16(label);  break;
+    case "UInt16Property": r.readUint16(label); break;
+    case "IntProperty":    r.readInt32(label);  break;
+    case "UInt32Property": r.readUint32(label); break;
+    case "Int64Property":  r.readInt64(label);  break;
+    case "UInt64Property": r.readUint64(label); break;
+
+    // ── Floating-point ───────────────────────────────────────────────────────
+    case "FloatProperty":  r.readFloat32(label); break;
+    case "DoubleProperty": r.readFloat64(label); break;
+
+    // ── String-like ──────────────────────────────────────────────────────────
+    case "StrProperty":
+      r.readFString(label); break;
+
+    case "NameProperty":
+      readFNameGroup(r, names, label); break;
+
+    case "TextProperty":
+      readTextAnnotation(r, label, valueEnd); break;
+
+    // ── Object references ────────────────────────────────────────────────────
+    case "ObjectProperty":
+    case "ClassProperty":
+    case "AssetObjectProperty":
+    case "WeakObjectProperty":
+    case "LazyObjectProperty":
+      r.readInt32(label); // FPackageIndex
+      break;
+
+    case "SoftObjectProperty":
+    case "SoftClassProperty":
+      // FSoftObjectPath = FTopLevelAssetPath (PackageName + AssetName, each 2×int32) + FString SubPath
+      r.group(label, () => {
+        readFNameGroup(r, names, "Package Name");
+        readFNameGroup(r, names, "Asset Name");
+        r.readFString("Sub Path");
+      });
+      break;
+
+    // ── Struct ───────────────────────────────────────────────────────────────
+    case "StructProperty": {
+      const structName = propType.params[0]?.name ?? "";
+      if (hasNative) {
+        const nativeReader = NATIVE_STRUCT_READERS[structName];
+        if (nativeReader) {
+          r.group(label, () => nativeReader(r));
+        } else {
+          // Unknown native struct — raw bytes
+          r.readBytes(valueEnd - r.pos, label);
+        }
+      } else {
+        // Non-native struct: many of these use custom binary serialization even
+        // without HasBinaryOrNativeSerialize, so read as raw bytes to be safe.
+        r.readBytes(valueEnd - r.pos, label);
+      }
+      break;
+    }
+
+    // ── Array ────────────────────────────────────────────────────────────────
+    case "ArrayProperty": {
+      const innerType = propType.params[0] ?? { name: "UnknownProperty", params: [] };
+      r.group(label, () => {
+        const count = r.readInt32("Count");
+        for (let i = 0; i < count && r.pos < valueEnd; i++) {
+          readPropertyValue(r, names, innerType, hasNative, valueEnd, fileVersionUE5, `[${i}]`);
+        }
+        return `${count} element${count !== 1 ? "s" : ""}`;
+      });
+      break;
+    }
+
+    // ── Set ──────────────────────────────────────────────────────────────────
+    case "SetProperty": {
+      const innerType = propType.params[0] ?? { name: "UnknownProperty", params: [] };
+      r.group(label, () => {
+        const numRemove = r.readInt32("Keys To Remove");
+        for (let i = 0; i < numRemove && r.pos < valueEnd; i++) {
+          readPropertyValue(r, names, innerType, hasNative, valueEnd, fileVersionUE5, `[remove ${i}]`);
+        }
+        const count = r.readInt32("Count");
+        for (let i = 0; i < count && r.pos < valueEnd; i++) {
+          readPropertyValue(r, names, innerType, hasNative, valueEnd, fileVersionUE5, `[${i}]`);
+        }
+        return `${count} element${count !== 1 ? "s" : ""}`;
+      });
+      break;
+    }
+
+    // ── Map ──────────────────────────────────────────────────────────────────
+    case "MapProperty": {
+      const keyType = propType.params[0] ?? { name: "UnknownProperty", params: [] };
+      const valType = propType.params[1] ?? { name: "UnknownProperty", params: [] };
+      r.group(label, () => {
+        const numRemove = r.readInt32("Keys To Remove");
+        for (let i = 0; i < numRemove && r.pos < valueEnd; i++) {
+          r.group(`[remove ${i}]`, () => {
+            readPropertyValue(r, names, keyType, false, valueEnd, fileVersionUE5, "Key");
+            readPropertyValue(r, names, valType, false, valueEnd, fileVersionUE5, "Value");
+          });
+        }
+        const count = r.readInt32("Count");
+        for (let i = 0; i < count && r.pos < valueEnd; i++) {
+          r.group(`[${i}]`, () => {
+            readPropertyValue(r, names, keyType, false, valueEnd, fileVersionUE5, "Key");
+            readPropertyValue(r, names, valType, false, valueEnd, fileVersionUE5, "Value");
+          });
+        }
+        return `${count} entr${count !== 1 ? "ies" : "y"}`;
+      });
+      break;
+    }
+
+    // ── Optional ─────────────────────────────────────────────────────────────
+    case "OptionalProperty": {
+      const innerType = propType.params[0] ?? { name: "UnknownProperty", params: [] };
+      r.group(label, () => {
+        const hasValue = r.readUint8("Has Value");
+        if (hasValue) {
+          readPropertyValue(r, names, innerType, hasNative, valueEnd, fileVersionUE5, "Value");
+        }
+      });
+      break;
+    }
+
+    // ── Unknown / fallback ────────────────────────────────────────────────────
+    default: {
+      const remaining = valueEnd - r.pos;
+      if (remaining > 0) r.readBytes(remaining, label);
+      break;
+    }
+  }
+}
+
+// ── Main entry point ───────────────────────────────────────────────────────────
 
 /**
  * Parse the tagged-property stream for one export's property region.
@@ -133,10 +388,11 @@ export function parseTaggedProperties(
         r.readInt32("Name Index");
         r.readInt32(); // instance number
 
-        // FPropertyTypeName: one or more nodes until Remaining reaches 0.
-        let typeName = "Unknown";
+        // FPropertyTypeName: one or more 12-byte nodes, recursively.
+        let propType: PropType = { name: "UnknownProperty", params: [] };
         r.group("Type", () => {
-          typeName = readTypeName(r, names);
+          propType = readTypeNameNode(r, names);
+          return propTypeStr(propType);
         });
 
         const size  = r.readInt32("Size");
@@ -155,10 +411,17 @@ export function parseTaggedProperties(
             }
           });
         }
-        // HasBinaryOrNativeSerialize (0x08): value bytes still present.
-        // BoolTrue (0x10): bool value is in flags, size == 0, no value bytes.
-        // SkippedSerialize (0x20): size bytes present, just gets skipped by loader.
-        if (size > 0) r.readBytes(size, `Value (${typeName})`);
+
+        // HasBinaryOrNativeSerialize (0x08): value bytes present, binary layout.
+        // BoolTrue (0x10): value in flags; size == 0, nothing to read.
+        // SkippedSerialize (0x20): bytes present but semantically skipped by loader.
+        if (size > 0) {
+          const hasNative = !!(flags & FLAG_HAS_BINARY_OR_NATIVE);
+          const valueEnd = r.pos + size;
+          readPropertyValue(r, names, propType, hasNative, valueEnd, fileVersionUE5, "Value");
+          // Safety: consume any bytes the value parser left unconsumed.
+          if (r.pos < valueEnd) r.readBytes(valueEnd - r.pos, "Remaining Value");
+        }
       });
     } else {
       // Old format (pre-1012): separate FName fields for type.
