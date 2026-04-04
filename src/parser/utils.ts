@@ -55,7 +55,6 @@ export function resolveClass(
 
 // ── Asset parser shared helpers ───────────────────────────────────────────────
 
-/** Shared GUID constants for UE custom version registries. */
 export const GUID_FRenderingObjectVersion          = "12F88B9F-88754AFC-A67CD90C-383ABD29";
 export const GUID_FEditorObjectVersion             = "E4B068ED-F49442E9-A231DA0B-2E46BB41";
 export const GUID_FFortniteMainBranchObjectVersion = "601D1886-AC644F84-AA16D3DE-0DEAC7D6";
@@ -67,7 +66,7 @@ export function readBool32(r: BinaryReader, label: string): boolean {
   return r.readUint32(label) !== 0;
 }
 
-/** Read FGuid as a group with annotated A/B/C/D fields, returned as a formatted string. */
+/** Unlike r.readFGuid(), emits a group annotation with A/B/C/D children and returns the formatted string. */
 export function readFGuid(r: BinaryReader, label: string): string {
   return r.group(label, () => {
     const a = r.readUint32("A");
@@ -78,7 +77,6 @@ export function readFGuid(r: BinaryReader, label: string): string {
   });
 }
 
-/** Read FName as two int32s (name index + instance number). */
 export function readFName(r: BinaryReader, names: string[], label: string): string {
   return r.group(label, () => {
     const idx    = r.readInt32("Name Index");
@@ -93,7 +91,6 @@ export function readPackageIndex(r: BinaryReader, label: string): number {
   return r.readInt32(label);
 }
 
-/** FStripDataFlags: 2 bytes of strip flag bitfields. */
 export interface StripFlags { globalFlags: number; classFlags: number; }
 
 export function readStripDataFlags(r: BinaryReader, label = "Strip Data Flags"): StripFlags {

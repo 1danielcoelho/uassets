@@ -41,7 +41,6 @@ export function initAnnotation(
   ranges: ByteRange[],
   onColorMapChange?: (ranges: ColoredRange[]) => void,
 ): AnnotationHandle {
-  // Abort previous instance's global listeners and remove its context menu.
   cleanupController?.abort();
   cleanupController = new AbortController();
   const { signal } = cleanupController;
@@ -53,7 +52,6 @@ export function initAnnotation(
   table.className = "annotation-table";
   container.appendChild(table);
 
-  // ── Expansion state ──
   const expandedRanges = new Set<ByteRange>();
 
   const notifyChange = onColorMapChange
@@ -76,13 +74,11 @@ export function initAnnotation(
   // ── Search highlight state ──
   let searchHighlightedTrs: HTMLTableRowElement[] = [];
 
-  // ── Rows ──
   const tbody = table.createTBody();
   for (const range of ranges) {
     buildRows(tbody, range, 0, expandedRanges, notifyChange, rowMap, rangeToRowInfo, rangeToTr, trToRange, rangeToParent, undefined);
   }
 
-  // ── Hover state ──
   let hoveredRow: HTMLTableRowElement | null = null;
   let lastHoveredStart: number | null = null;
   let lastHoveredEnd:   number | null = null;
@@ -115,6 +111,13 @@ export function initAnnotation(
   let ctxMenuRange: ByteRange | null = null;
   let ctxOnPrimary: (() => void) | null = null;
   let ctxExtraActions: Array<() => void> = [];
+
+  function hideCtxMenu(): void {
+    ctxMenu.classList.remove("visible");
+    ctxMenuRange = null;
+    ctxOnPrimary = null;
+    ctxExtraActions = [];
+  }
 
   const handle: AnnotationHandle = {
     onHoverChange: null,
@@ -312,10 +315,7 @@ export function initAnnotation(
   ctxMenu.addEventListener("click", (e) => {
     const item = (e.target as HTMLElement).closest<HTMLElement>(".ctx-menu-item");
     if (!item || item.classList.contains("disabled")) {
-      ctxMenu.classList.remove("visible");
-      ctxMenuRange = null;
-      ctxOnPrimary = null;
-      ctxExtraActions = [];
+      hideCtxMenu();
       return;
     }
 
@@ -323,10 +323,7 @@ export function initAnnotation(
     if (ctxExtraItems.contains(item)) {
       const idx = Array.from(ctxExtraItems.children).indexOf(item);
       ctxExtraActions[idx]?.();
-      ctxMenu.classList.remove("visible");
-      ctxMenuRange = null;
-      ctxOnPrimary = null;
-      ctxExtraActions = [];
+      hideCtxMenu();
       return;
     }
 
@@ -369,29 +366,16 @@ export function initAnnotation(
         }
       }
     }
-    ctxMenu.classList.remove("visible");
-    ctxMenuRange = null;
-    ctxOnPrimary = null;
-    ctxExtraActions = [];
+    hideCtxMenu();
   });
 
   window.addEventListener("click", (e) => {
     if (!ctxMenu.classList.contains("visible")) return;
-    if (!ctxMenu.contains(e.target as Node)) {
-      ctxMenu.classList.remove("visible");
-      ctxMenuRange = null;
-      ctxOnPrimary = null;
-      ctxExtraActions = [];
-    }
+    if (!ctxMenu.contains(e.target as Node)) hideCtxMenu();
   }, { signal });
 
   window.addEventListener("keydown", (e) => {
-    if (e.key === "Escape" && ctxMenu.classList.contains("visible")) {
-      ctxMenu.classList.remove("visible");
-      ctxMenuRange = null;
-      ctxOnPrimary = null;
-      ctxExtraActions = [];
-    }
+    if (e.key === "Escape" && ctxMenu.classList.contains("visible")) hideCtxMenu();
   }, { signal });
 
   // ── Annotation table contextmenu — "View bytes" as primary action ──
@@ -467,7 +451,6 @@ function buildRows(
   rangeToTr.set(range, tr);
   trToRange.set(tr, range);
 
-  // ── Swatch — all rows get their own color ──
   const swatchTd = document.createElement("td");
   swatchTd.className = "annotation-swatch";
   const dot = document.createElement("div");
@@ -476,13 +459,11 @@ function buildRows(
   swatchTd.appendChild(dot);
   tr.appendChild(swatchTd);
 
-  // ── Size ──
   const sizeTd = document.createElement("td");
   sizeTd.className = "annotation-size";
   sizeTd.textContent = formatSize(range.end - range.start);
   tr.appendChild(sizeTd);
 
-  // ── Name ──
   const nameTd = document.createElement("td");
   nameTd.className = "annotation-name";
   nameTd.style.paddingLeft = `${depth * 12 + 4}px`;
@@ -497,7 +478,6 @@ function buildRows(
   }
   tr.appendChild(nameTd);
 
-  // ── Value ──
   const valueTd = document.createElement("td");
   valueTd.className = "annotation-value";
   valueTd.textContent = valueStr(range);
@@ -506,7 +486,6 @@ function buildRows(
   tbody.appendChild(tr);
   const result: HTMLTableRowElement[] = [tr];
 
-  // ── Children ──
   if (hasChildren && range.kind === "group") {
     const children = range.children;
     const allDescendantRows: HTMLTableRowElement[] = [];

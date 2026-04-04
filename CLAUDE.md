@@ -1,8 +1,9 @@
 # General tips and guidelines
 
 * The assets and code in this project largely follow Unreal Engine 5.7.3 (available at `./UnrealEngine-5.7.3-release`), which can be different from what was in your training data. Be careful with your assumptions! If at any time you are in doubt, **CHECK THE SOURCE CODE** and don't just assume that you did!
-* The above rule is very important: Every time you are stuck for more than a few paragraphs on an issue, stop what you're doing and read all of the the relevant code until you understand what is happening, without guessing.
 * This file is your main memory for this project, and includes a section below for `Current Plan`. Whenever you progress on the plan, make sure do update this file as well with at least a summary of the actual current plan, both with your findings and the next steps.
+* Comments should always explain *why* something is done that way, and never explain *what* is done: The code itself should explain that. To achieve that, always use meaningful variable names (never abbreviations or single letters), and meaningful function and class names.
+* Never use "separator" comments like `// ── Rows ──` or `// ─── Generic helpers ──`
 
 # UAsset Viewer
 
@@ -22,38 +23,56 @@ Hosted on GitHub Pages. No server required — all parsing runs in the user's br
 - **Bun's built-in test runner** — unit tests for parsing logic, asset tests
 - **Output**: `dist/index.html` + `dist/bundle.js` (or inlined), deployable to GitHub Pages
 
-
 ## Project Structure
 
 ```
 uassets/
 ├── src/
 │   ├── cli/
-│   │   └── dump.ts            # CLI tool: dumps parsed annotations to stdout
+│   │   ├── dump.ts            # CLI tool: dumps parsed annotations to stdout
+│   │   └── harvest-guids.ts   # CLI tool: extracts custom version GUIDs from UE source
 │   ├── parser/
 │   │   ├── reader.ts          # BinaryReader — cursor-based, annotating reads
 │   │   ├── types.ts           # UE primitive interfaces (FGuid, FEngineVersion, FObjectExport, etc.)
-│   │   ├── utils.ts           # Shared helpers (resolveName, resolveClass, fGuidToString, etc.)
+│   │   ├── utils.ts           # Shared helpers (readFName, resolveClass, fGuidToString, etc.)
+│   │   ├── enums.ts           # Enum and flags value→name mappings
+│   │   ├── custom-version-guids.ts  # GUID→name lookup for custom version entries
 │   │   ├── summary.ts         # parsePackageFileSummary — fixed header only
 │   │   ├── parser.ts          # parseUAsset — main orchestrator + all segment parsing functions
 │   │   ├── dispatch.ts        # Class-specific parser registry and dispatch
-│   │   └── tagged-properties.ts  # FProperty / FPropertyTag parsing
+│   │   ├── tagged-properties.ts  # FProperty / FPropertyTag parsing
+│   │   ├── compressed-buffer.ts  # FCompressedBuffer header parsing
+│   │   └── assets/            # Class-specific export parsers (registered via dispatch.ts)
+│   │       ├── blueprint.ts
+│   │       ├── material.ts
+│   │       ├── static-mesh.ts
+│   │       ├── texture2d.ts
+│   │       └── world.ts
 │   ├── ui/
 │   │   ├── app.ts             # File open/drop wiring, summary panel rendering, dev auto-load
-│   │   ├── hex-view.ts        # Virtual-scrolling hex viewer with color-coded byte ranges
-│   │   └── legend.ts          # Legend table (swatch/size/name/value columns, collapsible groups)
+│   │   ├── hex-view.ts        # Canvas-based virtual-scrolling hex viewer with color-coded byte ranges
+│   │   ├── annotation.ts      # Annotation table (swatch/size/name/value columns, collapsible groups)
+│   │   ├── minimap.ts         # File overview minimap — canvas thumbnail of color map + viewport indicator
+│   │   └── utils.ts           # Search, color derivation, range building, shared UI helpers
 │   └── types.ts               # Shared types (ByteRange, ParseResult, AssetSummary, etc.)
 ├── test/
-│   ├── assets/5_7_3/          # Sample UE 5.7.3 .uasset/.umap files for regression tests
-│   │   ├── Blueprint.uasset
-│   │   ├── M_CustomMaterial.uasset
-│   │   ├── MI_TextureMaterial.uasset
-│   │   ├── MyMap.umap
-│   │   ├── SM_cube.uasset
-│   │   └── T_shapes.uasset
+│   ├── assets/                # Sample .uasset/.umap files for regression tests, organized by UE version
+│   │   ├── 4_15/
+│   │   ├── 4_20/
+│   │   ├── 4_21/
+│   │   ├── 4_24/
+│   │   ├── 4_27_2/
+│   │   ├── 5_0/
+│   │   ├── 5_1/
+│   │   ├── 5_2/
+│   │   ├── 5_3_2/
+│   │   ├── 5_4_4/
+│   │   ├── 5_5_4/
+│   │   ├── 5_6_1/
+│   │   └── 5_7_3/
 │   └── parser/
 │       └── parse-all.test.ts
-├── index.html                 # Full UI shell (menu bar, hex column, right panel)
+├── index.html                 # Full UI shell (menu bar, hex column, minimap, right panel)
 ├── dev.ts                     # Bun dev server with live-reload SSE
 ├── package.json
 ├── tsconfig.json
@@ -63,25 +82,25 @@ uassets/
 ## Layout
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│  [File ▾]  [Options ▾]   uasset viewer                          │  ← menu bar
-├──────────────────────────────┬──────────────────────────────────┤
-│                              │  Summary                         │
-│  HEX VIEW                    │  UStaticMesh — /Game/.../SM_Hero │
-│  00000000: 9E 2A 83 C1 ...   │  Engine: 5.3.2 (CL 27405482)     │
-│  [colored spans]             ├──────────────────────────────────┤
-│  [unannotated = default bg]  │  Legend                          │
-│                              │  ┌──┬─────────────┬───────────┐  │
-│  ... (199 MB, Bulk Data) ... │  │■ │ Name        │ Value     │  │
-│                              │  │■ │ Magic Num.  │ 9E2A83C1  │  │
-│                              │  │░ │ Pkg Name    │ /Game/... │  │ ← grayed = off-screen
-│                              │  └──┴─────────────┴───────────┘  │
-└──────────────────────────────┴──────────────────────────────────┘
+┌───────────────────────────────────────────────────────────────────────┐
+│  [File ▾]  [Options ▾]   uasset viewer                                │  ← menu bar
+├────────────────────────────────┬───┬──────────────────────────────────┤
+│                                │ M │  Summary                         │
+│  HEX VIEW (canvas)             │ I │  UStaticMesh — /Game/.../SM_Hero │
+│  00000000: 9E 2A 83 C1 ...     │ N │  Engine: 5.3.2 (CL 27405482)     │
+│  [color-coded bytes]           │ I ├──────────────────────────────────┤
+│  [unannotated = neutral bg]    │ M │  Annotations                     │
+│                                │ A │  ┌──┬──────┬─────────────┬─────┐ │
+│  ... (199 MB, Bulk Data) ...   │ P │  │■ │Bytes │ Name        │ Val │ │
+│                                │   │  │■ │  4 B │ Magic Num.  │ ... │ │
+│                                │   │  └──┴──────┴─────────────┴─────┘ │
+└────────────────────────────────┴───┴──────────────────────────────────┘
 ```
 
 - Menu bar spans full width
-- Left column: hex view (scrollable, takes remaining height)
-- Right column: summary card (fixed height) + legend table (scrollable, fills remaining)
+- Left column: hex view (canvas-rendered, scrollable, takes remaining height)
+- Center column: minimap (canvas thumbnail of color map + viewport indicator, click/drag to seek)
+- Right column: summary card (fixed height) + annotation table (scrollable, fills remaining)
 
 ### Bytes per row
 - Configurable constant `BYTES_PER_ROW` (default 16), not hardcoded throughout
@@ -91,23 +110,22 @@ uassets/
 - Every byte in the file has a color: either its annotation's color, or a default neutral background
 - No bytes are silently skipped — unknown regions are rendered with "unannotated" styling
 
-### Virtual scrolling
-- The scroll container has a fixed pixel height; a "spacer" div is sized to the total virtual height
-- Only ~100–200 rows are in the DOM at once; on scroll events the render window shifts
-- Row height is fixed (simplifies math); ellipsis rows count as 1 row height
-- `IntersectionObserver` on legend table rows: grays out entries whose byte ranges are entirely outside the current hex view viewport
+### Virtual scrolling (hex view)
+- The hex view renders to a `<canvas>` element using a sticky-position trick: the canvas stays fixed in the viewport while a tall spacer div drives the scrollbar
+- Row height is fixed (simplifies math); only visible rows are repainted on each animation frame
+- Canvas is redrawn on scroll via `requestAnimationFrame`
 
-### Legend table
+### Annotation table
 - A `<table>` element with columns: `[swatch]` | `[Bytes]` | `[Name]` | `[Value]`
 - `table-layout: fixed` — columns never auto-resize based on content; long names get ellipsis
 - Groups are collapsible; clicking a group row expands/collapses its direct children
 - Collapse state is derived from DOM visibility (not a closure boolean) so that collapsing a parent
-  and re-expanding it leaves inner groups in a correctly-collapsed state (icons + toggle behaviour)
-- Clicking a legend row scrolls the hex view to that range (TODO: not yet implemented)
+  and re-expanding it leaves inner groups in a correctly-collapsed state (icons + toggle behavior)
+- Clicking an annotation row scrolls the hex view to that byte range
 
 ### Summary Panel
 
-A card in the top-right, above the legend. Built from `AssetSummary`
+A card in the top-right, above the annotation table. Built from `AssetSummary`
 
 > **UStaticMesh** — `/Game/Characters/Hero/SM_Hero`
 > Engine 5.3.2 (CL 27405482)

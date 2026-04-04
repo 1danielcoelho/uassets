@@ -102,7 +102,6 @@ export interface ColoredRange {
   range: ByteRange;
 }
 
-/** Binary search: find the colored range containing `offset`, or null. */
 export function colorForByte(offset: number, map: ColoredRange[]): ColoredRange | null {
   let lo = 0, hi = map.length - 1;
   while (lo <= hi) {
@@ -115,7 +114,6 @@ export function colorForByte(offset: number, map: ColoredRange[]): ColoredRange 
   return null;
 }
 
-/** Build a flat list of colored ranges from the range tree, respecting expansion state. */
 export function buildActiveRanges(ranges: ByteRange[], expandedRanges: Set<ByteRange>): ColoredRange[] {
   const result: ColoredRange[] = [];
   for (const range of ranges) {
@@ -202,7 +200,6 @@ export function formatSize(n: number): string {
   return `${(n / 1_000_000_000).toFixed(2)} GB`;
 }
 
-/** Escape HTML special characters for safe insertion into HTML. */
 export function escHtml(s: string): string {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
@@ -210,11 +207,9 @@ export function escHtml(s: string): string {
 /** Format a ByteRange's full value for copying to clipboard (no truncation for strings/groups). */
 export function fullValueStr(range: ByteRange): string {
   switch (range.kind) {
-    case "int8":  case "int16":  case "int32":
-    case "uint8": case "uint16": case "uint32":
+    case "int8":  case "int16":  case "int32":  case "int64":
+    case "uint8": case "uint16": case "uint32": case "uint64":
     case "float32": case "float64":
-      return range.display ?? range.value.toString();
-    case "int64": case "uint64":
       return range.display ?? range.value.toString();
     case "bytes": {
       const cap = Math.min(range.value.length, 64);
@@ -232,14 +227,11 @@ export function fullValueStr(range: ByteRange): string {
   }
 }
 
-/** Format a ByteRange's value for display in the legend. */
 export function valueStr(range: ByteRange): string {
   switch (range.kind) {
-    case "int8":  case "int16":  case "int32":
-    case "uint8": case "uint16": case "uint32":
+    case "int8":  case "int16":  case "int32":  case "int64":
+    case "uint8": case "uint16": case "uint32": case "uint64":
     case "float32": case "float64":
-      return range.display ?? range.value.toString();
-    case "int64": case "uint64":
       return range.display ?? range.value.toString();
     case "bytes": {
       const preview = Array.from(range.value.slice(0, 8))

@@ -35,6 +35,7 @@
 
 import { BinaryReader } from "./reader.ts";
 import { flagsStr8, EPropertyTagFlags, EPropertyTagExtension, EClassSerializationControlExtension } from "./enums.ts";
+import { readFName } from "./utils.ts";
 
 // EPropertyTagFlags
 const FLAG_HAS_ARRAY_INDEX            = 0x01;
@@ -102,21 +103,6 @@ const NATIVE_STRUCT_READERS: Record<string, (r: BinaryReader) => void> = {
   Box2D:         r => { r.readFloat64("Min.X"); r.readFloat64("Min.Y"); r.readFloat64("Max.X"); r.readFloat64("Max.Y"); r.readUint8("IsValid"); },
   Box:           r => { r.readFloat64("Min.X"); r.readFloat64("Min.Y"); r.readFloat64("Min.Z"); r.readFloat64("Max.X"); r.readFloat64("Max.Y"); r.readFloat64("Max.Z"); r.readUint8("IsValid"); },
 };
-
-// ── Helpers ────────────────────────────────────────────────────────────────────
-
-/**
- * Read an FName (2 × int32) and emit a group annotation whose value is the
- * resolved name string (e.g. "StaticMesh" or "MySlot_0").
- */
-function readFNameGroup(r: BinaryReader, names: string[], label: string): string {
-  return r.group(label, () => {
-    const ni  = r.readInt32("Name Index");
-    const num = r.readInt32("Name Number");
-    const base = names[ni] ?? `<name#${ni}>`;
-    return num > 0 ? `${base}_${num - 1}` : base;
-  }) as string;
-}
 
 /** Read an FText value, emitting a group annotation with label. */
 function readTextAnnotation(r: BinaryReader, label: string, valueEnd: number): void {
@@ -192,7 +178,7 @@ function readPropertyValue(
         r.readUint8(label);
       } else {
         // Enum value stored as FName (8 bytes)
-        readFNameGroup(r, names, label);
+        readFName(r, names, label);
       }
       break;
     }
@@ -213,7 +199,7 @@ function readPropertyValue(
       r.readFString(label); break;
 
     case "NameProperty":
-      readFNameGroup(r, names, label); break;
+      readFName(r, names, label); break;
 
     case "TextProperty":
       readTextAnnotation(r, label, valueEnd); break;
@@ -231,8 +217,8 @@ function readPropertyValue(
     case "SoftClassProperty":
       // FSoftObjectPath = FTopLevelAssetPath (PackageName + AssetName, each 2×int32) + FString SubPath
       r.group(label, () => {
-        readFNameGroup(r, names, "Package Name");
-        readFNameGroup(r, names, "Asset Name");
+        readFName(r, names, "Package Name");
+        readFName(r, names, "Asset Name");
         r.readFString("Sub Path");
       });
       break;
