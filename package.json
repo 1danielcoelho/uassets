@@ -2,6 +2,7 @@
   "name": "uassets",
   "type": "module",
   "private": true,
+  "license": "MIT",
   "scripts": {
     "dev": "bun dev.ts",
     "build": "bun build index.html --outdir dist --minify && cp -r examples dist/examples",

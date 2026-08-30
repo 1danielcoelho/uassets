@@ -37,3 +37,7 @@ Requires [Bun](https://bun.sh).
 - Canvas-based hex viewer with virtual scrolling
 - Bun for bundling, dev server, and tests
 - Deployed to GitHub Pages via static build
+
+## License
+
+[MIT](LICENSE)
