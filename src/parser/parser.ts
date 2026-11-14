@@ -42,7 +42,7 @@ import type { ParseResult, AssetSummary } from "../types.ts";
 
 // ── Package index resolver ────────────────────────────────────────────────────
 
-function resolvePackageIndex(
+export function resolvePackageIndex(
   imports: FObjectImport[],
   exports: FObjectExport[],
   names: string[],
@@ -59,7 +59,7 @@ function resolvePackageIndex(
 
 // ── Names table ───────────────────────────────────────────────────────────────
 
-function parseNamesTable(r: BinaryReader, h: PackageFileSummaryData): string[] {
+export function parseNamesTable(r: BinaryReader, h: PackageFileSummaryData): string[] {
   const names: string[] = [];
   if (h.nameCount <= 0 || h.nameOffset <= 0) return names;
 
@@ -84,7 +84,7 @@ function parseNamesTable(r: BinaryReader, h: PackageFileSummaryData): string[] {
 
 // ── Imports table ─────────────────────────────────────────────────────────────
 
-function parseImportsTable(
+export function parseImportsTable(
   r: BinaryReader,
   h: PackageFileSummaryData,
   names: string[],
@@ -136,7 +136,7 @@ function parseImportsTable(
 
 // ── Exports table ─────────────────────────────────────────────────────────────
 
-function parseExportsTable(
+export function parseExportsTable(
   r: BinaryReader,
   h: PackageFileSummaryData,
   names: string[],
@@ -255,7 +255,7 @@ function parseExportsTable(
  * searchable names, preload dependencies, data resources, and Verse cells.
  * Returns the soft object paths array (needed by metadata parsing).
  */
-function parseIndexTables(
+export function parseIndexTables(
   r: BinaryReader,
   h: PackageFileSummaryData,
   names: string[],
@@ -413,7 +413,7 @@ function parseIndexTables(
  * gatherable text data, import type hierarchies, thumbnail table, asset registry data,
  * world tile info, exports footer tag, package trailer.
  */
-function parseOpaqueBlobs(
+export function parseOpaqueBlobs(
   r: BinaryReader,
   h: PackageFileSummaryData,
   names: string[],
@@ -630,7 +630,7 @@ function parseOpaqueBlobs(
 
 // ── Metadata ──────────────────────────────────────────────────────────────────
 
-function parseMetadata(
+export function parseMetadata(
   r: BinaryReader,
   h: PackageFileSummaryData,
   names: string[],
@@ -688,7 +688,7 @@ function parseMetadata(
  * native header bytes (if any), tagged properties, native tail bytes (if any).
  * Falls back to an opaque blob if script offset bounds are unavailable.
  */
-function parseGenericExport(
+export function parseGenericExport(
   r: BinaryReader,
   exp: FObjectExport,
   cls: string,
