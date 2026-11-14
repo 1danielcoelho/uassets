@@ -27,26 +27,46 @@ export class BinaryReader {
   private readonly view: DataView;
   private readonly bytes: Uint8Array;
   private readonly _annotations: ByteRange[] = [];
+  /** The absolute file offset of `buffer[0]` — see the constructor. */
+  private readonly base: number;
+  private readonly total: number;
 
   /** Current read cursor position (byte offset). */
   pos: number = 0;
 
-  constructor(buffer: ArrayBuffer) {
+  /**
+   * Windowed reads: `buffer` holds the file's bytes
+   * `[baseOffset, baseOffset + buffer.byteLength)`; `pos`, `seek`, every
+   * annotation and `byteLength` speak ABSOLUTE file offsets, and `byteLength`
+   * is the whole file's length when `totalLength` is given. Upstream code
+   * that seeks to an export's `serialOffset` therefore works unchanged over a
+   * buffer holding only that export. A read outside the window is the same
+   * RangeError as a read past the end of a whole-file buffer.
+   */
+  constructor(buffer: ArrayBuffer, baseOffset: number = 0, totalLength?: number) {
     this.view = new DataView(buffer);
     this.bytes = new Uint8Array(buffer);
+    this.base = baseOffset;
+    this.total = totalLength ?? baseOffset + buffer.byteLength;
+    this.pos = baseOffset;
   }
 
   get byteLength(): number {
-    return this.view.byteLength;
+    return this.total;
+  }
+
+  /** Translate an absolute position to an index into the window. */
+  private at(pos: number): number {
+    return pos - this.base;
   }
 
   /** Throw a descriptive error if reading `n` bytes at the current position would exceed the buffer. */
   private assertBounds(n: number, context?: string): void {
-    if (this.pos + n > this.view.byteLength) {
+    if (this.pos < this.base || this.pos + n > this.base + this.view.byteLength) {
       const ctx = context ? ` (reading "${context}")` : "";
       throw new RangeError(
         `Out of bounds${ctx}: tried to read ${n} bytes at offset 0x${this.pos.toString(16).toUpperCase()}, ` +
-        `but file is only ${this.view.byteLength} bytes (0x${this.view.byteLength.toString(16).toUpperCase()})`,
+        `but the window is [0x${this.base.toString(16).toUpperCase()}, 0x${(this.base + this.view.byteLength).toString(16).toUpperCase()})`,
       );
     }
   }
@@ -58,7 +78,7 @@ export class BinaryReader {
   readUint8(label?: string): number {
     const start = this.pos;
     this.assertBounds(1, label);
-    const value = this.view.getUint8(this.pos);
+    const value = this.view.getUint8(this.at(this.pos));
     this.pos += 1;
     if (label !== undefined) this._annotations.push({ kind: "uint8", start, end: this.pos, label, value });
     return value;
@@ -69,7 +89,7 @@ export class BinaryReader {
   readInt16(label?: string): number {
     const start = this.pos;
     this.assertBounds(2, label);
-    const value = this.view.getInt16(this.pos, true);
+    const value = this.view.getInt16(this.at(this.pos), true);
     this.pos += 2;
     if (label !== undefined) this._annotations.push({ kind: "int16", start, end: this.pos, label, value });
     return value;
@@ -80,7 +100,7 @@ export class BinaryReader {
   readUint16(label?: string): number {
     const start = this.pos;
     this.assertBounds(2, label);
-    const value = this.view.getUint16(this.pos, true);
+    const value = this.view.getUint16(this.at(this.pos), true);
     this.pos += 2;
     if (label !== undefined) this._annotations.push({ kind: "uint16", start, end: this.pos, label, value });
     return value;
@@ -91,7 +111,7 @@ export class BinaryReader {
   readInt32(label?: string): number {
     const start = this.pos;
     this.assertBounds(4, label);
-    const value = this.view.getInt32(this.pos, true);
+    const value = this.view.getInt32(this.at(this.pos), true);
     this.pos += 4;
     if (label !== undefined) this._annotations.push({ kind: "int32", start, end: this.pos, label, value });
     return value;
@@ -102,7 +122,7 @@ export class BinaryReader {
   readUint32(label?: string): number {
     const start = this.pos;
     this.assertBounds(4, label);
-    const value = this.view.getUint32(this.pos, true);
+    const value = this.view.getUint32(this.at(this.pos), true);
     this.pos += 4;
     if (label !== undefined) this._annotations.push({ kind: "uint32", start, end: this.pos, label, value });
     return value;
@@ -113,7 +133,7 @@ export class BinaryReader {
   readUint32BE(label?: string): number {
     const start = this.pos;
     this.assertBounds(4, label);
-    const value = this.view.getUint32(this.pos, false);
+    const value = this.view.getUint32(this.at(this.pos), false);
     this.pos += 4;
     if (label !== undefined) this._annotations.push({ kind: "uint32", start, end: this.pos, label, value });
     return value;
@@ -124,7 +144,7 @@ export class BinaryReader {
   readUint64BE(label?: string): bigint {
     const start = this.pos;
     this.assertBounds(8, label);
-    const value = this.view.getBigUint64(this.pos, false);
+    const value = this.view.getBigUint64(this.at(this.pos), false);
     this.pos += 8;
     if (label !== undefined) this._annotations.push({ kind: "uint64", start, end: this.pos, label, value });
     return value;
@@ -135,7 +155,7 @@ export class BinaryReader {
   readInt64(label?: string): bigint {
     const start = this.pos;
     this.assertBounds(8, label);
-    const value = this.view.getBigInt64(this.pos, true);
+    const value = this.view.getBigInt64(this.at(this.pos), true);
     this.pos += 8;
     if (label !== undefined) this._annotations.push({ kind: "int64", start, end: this.pos, label, value });
     return value;
@@ -146,7 +166,7 @@ export class BinaryReader {
   readUint64(label?: string): bigint {
     const start = this.pos;
     this.assertBounds(8, label);
-    const value = this.view.getBigUint64(this.pos, true);
+    const value = this.view.getBigUint64(this.at(this.pos), true);
     this.pos += 8;
     if (label !== undefined) this._annotations.push({ kind: "uint64", start, end: this.pos, label, value });
     return value;
@@ -157,7 +177,7 @@ export class BinaryReader {
   readFloat32(label?: string): number {
     const start = this.pos;
     this.assertBounds(4, label);
-    const value = this.view.getFloat32(this.pos, true);
+    const value = this.view.getFloat32(this.at(this.pos), true);
     this.pos += 4;
     if (label !== undefined) this._annotations.push({ kind: "float32", start, end: this.pos, label, value });
     return value;
@@ -168,7 +188,7 @@ export class BinaryReader {
   readFloat64(label?: string): number {
     const start = this.pos;
     this.assertBounds(8, label);
-    const value = this.view.getFloat64(this.pos, true);
+    const value = this.view.getFloat64(this.at(this.pos), true);
     this.pos += 8;
     if (label !== undefined) this._annotations.push({ kind: "float64", start, end: this.pos, label, value });
     return value;
@@ -179,7 +199,7 @@ export class BinaryReader {
   readBytes(n: number, label?: string): Uint8Array {
     const start = this.pos;
     this.assertBounds(n, label);
-    const value = this.bytes.subarray(this.pos, this.pos + n);
+    const value = this.bytes.subarray(this.at(this.pos), this.at(this.pos) + n);
     this.pos += n;
     if (label !== undefined) this._annotations.push({ kind: "bytes", start, end: this.pos, label, value });
     return value;
@@ -187,7 +207,7 @@ export class BinaryReader {
 
   /** Read bytes at an absolute offset without moving the cursor. */
   peekBytesAt(offset: number, n: number): Uint8Array {
-    return this.bytes.slice(offset, offset + n);
+    return this.bytes.slice(this.at(offset), this.at(offset) + n);
   }
 
   /** Move cursor to an absolute position. */
