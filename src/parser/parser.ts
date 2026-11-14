@@ -106,7 +106,7 @@ function parseImportsTable(
         r.readInt32("Class Name Number");
         const outerIndex      = r.readInt32("Outer Index");
         const objectNameIdx   = r.readInt32("Object Name");
-        r.readInt32("Object Name Number");
+        const objectNameNumber = r.readInt32("Object Name Number"); // kept: the FName instance number, see types.ts
 
         // Editor-only: PackageName (FName = 2 × int32) since fileVersionUE4 >= 520
         if (h.fileVersionUE4 >= UE4_NON_OUTER_PACKAGE_IMPORT) {
@@ -124,6 +124,7 @@ function parseImportsTable(
           className:    classNameIdx,
           outerIndex,
           objectName:   objectNameIdx,
+          objectNameNumber,
         };
         imports.push(imp);
         return `${resolveName(names, classNameIdx)} ${resolveName(names, objectNameIdx)}`;
@@ -164,7 +165,7 @@ function parseExportsTable(
           ? r.readInt32("Template Index") : 0;
         const outerIndex  = r.readInt32("Outer Index");
         const objectNameIdx = r.readInt32("Object Name");
-        r.readInt32("Object Name Number");
+        const objectNameNumber = r.readInt32("Object Name Number"); // kept: the FName instance number, see types.ts
         const objectFlags = r.readUint32("Object Flags");
         r.setLastDisplay(flagsStr(objectFlags, EObjectFlags));
 
@@ -223,6 +224,7 @@ function parseExportsTable(
         const exp: FObjectExport = {
           classIndex, superIndex, templateIndex, outerIndex,
           objectName: objectNameIdx,
+          objectNameNumber,
           objectFlags, serialSize, serialOffset,
           forcedExport, notForClient, notForServer,
           packageGuid: packageGuid ?? { a: 0, b: 0, c: 0, d: 0 },
