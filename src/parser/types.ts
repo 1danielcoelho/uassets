@@ -55,6 +55,7 @@ export interface FObjectExport {
   templateIndex: number;   // UE4.14+
   outerIndex: number;
   objectName: number;      // index into names table
+  objectNameNumber: number; // FName instance number (0 = none; N ⇒ "_<N-1>" suffix)
   objectFlags: number;
   serialSize: bigint;
   serialOffset: bigint;
@@ -85,5 +86,6 @@ export interface FObjectImport {
   className: number;     // name index
   outerIndex: number;
   objectName: number;    // name index
+  objectNameNumber: number; // FName instance number (0 = none)
   // UE5 optional: package name
 }
